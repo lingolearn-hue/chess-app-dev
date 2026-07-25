@@ -12,10 +12,18 @@ interface Props {
   onSquareTap: (square: string) => void;
   hintFrom?: string | null;
   hintTo?: string | null;
-  bloodSquares?: Set<string>;
+  bloodMap?: Map<string, 'w' | 'b'>;
 }
 
-export default function ChessBoard({ game, selected, legalMoves, onSquareTap, hintFrom, hintTo, bloodSquares }: Props) {
+// Deterministic pseudo-random index (0-3) per square, so the same square
+// always gets the same spatter pattern rather than reshuffling on re-render.
+function patternIndex(square: string): number {
+  let hash = 0;
+  for (let i = 0; i < square.length; i++) hash = (hash * 31 + square.charCodeAt(i)) | 0;
+  return Math.abs(hash) % 4;
+}
+
+export default function ChessBoard({ game, selected, legalMoves, onSquareTap, hintFrom, hintTo, bloodMap }: Props) {
   // `game` is a single mutated-in-place Chess instance (see App.tsx), so its
   // object reference never changes between moves. Depending on `game` alone
   // means this memo would never recompute after the first render. Depending
@@ -49,7 +57,7 @@ export default function ChessBoard({ game, selected, legalMoves, onSquareTap, hi
           const isCheck = inCheckSquare === square;
           const isCapture = isLegal && !!piece;
           const isHint = hintFrom === square || hintTo === square;
-          const hasBlood = bloodSquares?.has(square) ?? false;
+          const bloodColor = bloodMap?.get(square);
 
           const classes = [
             'square',
@@ -59,7 +67,7 @@ export default function ChessBoard({ game, selected, legalMoves, onSquareTap, hi
             isCapture ? 'capture' : '',
             isCheck ? 'check' : '',
             isHint ? 'hint' : '',
-            hasBlood ? 'blood' : '',
+            bloodColor ? `blood blood-${bloodColor} blood-p${patternIndex(square)}` : '',
           ].filter(Boolean).join(' ');
 
           return (

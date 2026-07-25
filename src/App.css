@@ -82,14 +82,46 @@
   inset: 0;
   pointer-events: none;
   mix-blend-mode: multiply;
-  opacity: 0.4;
+  opacity: 0.22;
+}
+
+/* Captured white pieces leave red specks; captured black pieces leave light purple. */
+.square.blood-w::before { --blood-color: #7a1414; }
+.square.blood-b::before { --blood-color: #8a6bb0; }
+
+/* Four distinct spatter arrangements, all clustered toward the square's
+   center rather than the edges, picked per-square so it doesn't look
+   repetitive across the board. */
+.square.blood-p0::before {
   background-image:
-    radial-gradient(circle at 28% 34%, #5a1010 0%, #5a1010 4%, transparent 5%),
-    radial-gradient(circle at 62% 22%, #5a1010 0%, #5a1010 3%, transparent 4%),
-    radial-gradient(circle at 71% 58%, #5a1010 0%, #5a1010 5%, transparent 6%),
-    radial-gradient(circle at 40% 68%, #5a1010 0%, #5a1010 3%, transparent 4%),
-    radial-gradient(circle at 20% 76%, #5a1010 0%, #5a1010 2.5%, transparent 3.5%),
-    radial-gradient(circle at 82% 40%, #5a1010 0%, #5a1010 2.5%, transparent 3.5%);
+    radial-gradient(circle at 46% 48%, var(--blood-color) 0%, var(--blood-color) 4%, transparent 5%),
+    radial-gradient(circle at 58% 40%, var(--blood-color) 0%, var(--blood-color) 2.5%, transparent 3.5%),
+    radial-gradient(circle at 40% 58%, var(--blood-color) 0%, var(--blood-color) 2%, transparent 3%),
+    radial-gradient(circle at 55% 60%, var(--blood-color) 0%, var(--blood-color) 1.8%, transparent 2.8%);
+}
+
+.square.blood-p1::before {
+  background-image:
+    radial-gradient(circle at 52% 44%, var(--blood-color) 0%, var(--blood-color) 3.5%, transparent 4.5%),
+    radial-gradient(circle at 38% 52%, var(--blood-color) 0%, var(--blood-color) 2.2%, transparent 3.2%),
+    radial-gradient(circle at 60% 58%, var(--blood-color) 0%, var(--blood-color) 2.6%, transparent 3.6%),
+    radial-gradient(circle at 47% 62%, var(--blood-color) 0%, var(--blood-color) 1.6%, transparent 2.6%);
+}
+
+.square.blood-p2::before {
+  background-image:
+    radial-gradient(circle at 42% 42%, var(--blood-color) 0%, var(--blood-color) 3%, transparent 4%),
+    radial-gradient(circle at 60% 46%, var(--blood-color) 0%, var(--blood-color) 2%, transparent 3%),
+    radial-gradient(circle at 50% 56%, var(--blood-color) 0%, var(--blood-color) 4%, transparent 5%),
+    radial-gradient(circle at 62% 62%, var(--blood-color) 0%, var(--blood-color) 1.6%, transparent 2.6%);
+}
+
+.square.blood-p3::before {
+  background-image:
+    radial-gradient(circle at 48% 40%, var(--blood-color) 0%, var(--blood-color) 2.4%, transparent 3.4%),
+    radial-gradient(circle at 36% 50%, var(--blood-color) 0%, var(--blood-color) 1.8%, transparent 2.8%),
+    radial-gradient(circle at 56% 52%, var(--blood-color) 0%, var(--blood-color) 3.4%, transparent 4.4%),
+    radial-gradient(circle at 44% 63%, var(--blood-color) 0%, var(--blood-color) 2%, transparent 3%);
 }
 
 .top-bar button:disabled {

@@ -243,8 +243,6 @@ export default function App() {
     if (gameOver || pendingPromotion || thinking) return;
     if (vsComputer && game.turn() === computerColor) return; // wait for the computer's move
 
-    if (hintMove) setHintMove(null);
-
     if (selected) {
       if (legalMoves.includes(square)) {
         const verboseMoves = game.moves({ square: selected as any, verbose: true }) as any[];
@@ -274,7 +272,7 @@ export default function App() {
       setSelected(square);
       setLegalMoves(moves.map((m) => m.to));
     }
-  }, [game, selected, legalMoves, pendingPromotion, finalizeMove, phase, handleRemovePiece, gameOver, finishingMate, finalizeKingCapture, vsComputer, computerColor, thinking, hintMove]);
+  }, [game, selected, legalMoves, pendingPromotion, finalizeMove, phase, handleRemovePiece, gameOver, finishingMate, finalizeKingCapture, vsComputer, computerColor, thinking]);
 
   const handlePromotionChoice = useCallback((piece: 'q' | 'r' | 'b' | 'n') => {
     if (!pendingPromotion) return;
@@ -370,7 +368,8 @@ export default function App() {
     capturedBlack.reduce((sum, t) => sum + (PIECE_VALUE[t] ?? 0), 0) -
     capturedWhite.reduce((sum, t) => sum + (PIECE_VALUE[t] ?? 0), 0);
   const blackAdvantage = -whiteAdvantage;
-  const bloodSquares = new Set(captureLog.map((c) => c.square));
+  const bloodMap = new Map<string, 'w' | 'b'>();
+  for (const c of captureLog) bloodMap.set(c.square, c.color);
 
   const status = (() => {
     if (phase === 'setup') return 'Setting up new game';
@@ -424,7 +423,7 @@ export default function App() {
         onSquareTap={handleSquareTap}
         hintFrom={hintMove?.from}
         hintTo={hintMove?.to}
-        bloodSquares={bloodSquares}
+        bloodMap={bloodMap}
       />
 
       {/* White's own trophies (captured black pieces) sit below the board from White's view, i.e. at the bottom of the screen. */}
