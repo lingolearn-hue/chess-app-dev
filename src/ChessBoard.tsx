@@ -12,9 +12,10 @@ interface Props {
   onSquareTap: (square: string) => void;
   hintFrom?: string | null;
   hintTo?: string | null;
+  bloodSquares?: Set<string>;
 }
 
-export default function ChessBoard({ game, selected, legalMoves, onSquareTap, hintFrom, hintTo }: Props) {
+export default function ChessBoard({ game, selected, legalMoves, onSquareTap, hintFrom, hintTo, bloodSquares }: Props) {
   // `game` is a single mutated-in-place Chess instance (see App.tsx), so its
   // object reference never changes between moves. Depending on `game` alone
   // means this memo would never recompute after the first render. Depending
@@ -48,6 +49,7 @@ export default function ChessBoard({ game, selected, legalMoves, onSquareTap, hi
           const isCheck = inCheckSquare === square;
           const isCapture = isLegal && !!piece;
           const isHint = hintFrom === square || hintTo === square;
+          const hasBlood = bloodSquares?.has(square) ?? false;
 
           const classes = [
             'square',
@@ -57,6 +59,7 @@ export default function ChessBoard({ game, selected, legalMoves, onSquareTap, hi
             isCapture ? 'capture' : '',
             isCheck ? 'check' : '',
             isHint ? 'hint' : '',
+            hasBlood ? 'blood' : '',
           ].filter(Boolean).join(' ');
 
           return (

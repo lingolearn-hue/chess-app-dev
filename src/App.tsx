@@ -47,6 +47,12 @@ interface FinishingMate {
   attackerSquares: string[];
 }
 
+interface CaptureEvent {
+  square: string; // where the captured piece actually sat
+  type: string; // captured piece type letter
+  color: 'w' | 'b'; // color of the captured piece
+}
+
 type Phase = 'setup' | 'playing';
 
 export default function App() {
@@ -67,6 +73,10 @@ export default function App() {
   const [finishingMate, setFinishingMate] = useState<FinishingMate | null>(null);
   const [hintMove, setHintMove] = useState<{ from: string; to: string } | null>(null);
   const [thinking, setThinking] = useState(false);
+  // Tracked independently of chess.js's own history: the finishing king
+  // capture replaces gameRef.current with a fresh instance (see below), which
+  // would otherwise silently drop all earlier captures from this list.
+  const [captureLog, setCaptureLog] = useState<CaptureEvent[]>([]);
 
   // New games start in 'setup' phase: time control, opponent type, and the
   // handicap piece-removal function can only be adjusted here, before play begins.
@@ -122,10 +132,19 @@ export default function App() {
   });
 
   const finalizeMove = useCallback((from: string, to: string, promotion?: 'q' | 'r' | 'b' | 'n') => {
+    let moveResult: any;
     try {
-      gameRef.current!.move({ from, to, promotion: promotion ?? 'q' });
+      moveResult = gameRef.current!.move({ from, to, promotion: promotion ?? 'q' });
     } catch {
       return;
+    }
+    if (moveResult?.captured) {
+      // En passant captures a pawn that isn't actually on the destination square.
+      const captureSquare = moveResult.flags?.includes('e')
+        ? `${to[0]}${from[1]}`
+        : to;
+      const capturedColor: 'w' | 'b' = moveResult.color === 'w' ? 'b' : 'w';
+      setCaptureLog((log) => [...log, { square: captureSquare, type: moveResult.captured, color: capturedColor }]);
     }
     setSelected(null);
     setLegalMoves([]);
@@ -171,10 +190,15 @@ export default function App() {
     const fenParts = gameRef.current!.fen().split(' ');
     fenParts[1] = finishingMate.winnerColor;
     const scratch = new Chess(fenParts.join(' '));
+    let moveResult: any;
     try {
-      scratch.move({ from, to });
+      moveResult = scratch.move({ from, to });
     } catch {
       return;
+    }
+    if (moveResult?.captured) {
+      const capturedColor: 'w' | 'b' = finishingMate.winnerColor === 'w' ? 'b' : 'w';
+      setCaptureLog((log) => [...log, { square: to, type: moveResult.captured, color: capturedColor }]);
     }
     gameRef.current = scratch;
     setActive(null);
@@ -289,9 +313,13 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [finishingMate, vsComputer, computerColor, finalizeKingCapture]);
 
-  const handleHint = () => {
+  const handleHintToggle = (side: 'w' | 'b') => {
     if (phase !== 'playing' || gameOver || finishingMate || pendingPromotion || thinking) return;
-    if (vsComputer && game.turn() === computerColor) return;
+    if (game.turn() !== side) return;
+    if (hintMove) {
+      setHintMove(null);
+      return;
+    }
     const scratch = new Chess(game.fen());
     const mv = findBestMove(scratch, DIFFICULTY_DEPTH[difficulty]);
     if (mv) setHintMove({ from: mv.from, to: mv.to });
@@ -307,6 +335,7 @@ export default function App() {
     setFinishingMate(null);
     setHintMove(null);
     setThinking(false);
+    setCaptureLog([]);
     setSetupMinutes(minutes);
     setSetupVsComputer(vsComputer);
     setSetupComputerColor(computerColor);
@@ -330,19 +359,18 @@ export default function App() {
 
   const handlePauseToggle = () => setPaused((p) => !p);
 
-  // Derive captured pieces (in the order captured) + material advantage from move history.
-  const history = game.history({ verbose: true }) as any[];
+  // Derive captured pieces (in the order captured) + material advantage from the capture log.
   const capturedBlack: string[] = []; // black pieces captured, i.e. White's trophies
   const capturedWhite: string[] = []; // white pieces captured, i.e. Black's trophies
-  for (const m of history) {
-    if (!m.captured) continue;
-    if (m.color === 'w') capturedBlack.push(m.captured);
-    else capturedWhite.push(m.captured);
+  for (const c of captureLog) {
+    if (c.color === 'b') capturedBlack.push(c.type);
+    else capturedWhite.push(c.type);
   }
   const whiteAdvantage =
     capturedBlack.reduce((sum, t) => sum + (PIECE_VALUE[t] ?? 0), 0) -
     capturedWhite.reduce((sum, t) => sum + (PIECE_VALUE[t] ?? 0), 0);
   const blackAdvantage = -whiteAdvantage;
+  const bloodSquares = new Set(captureLog.map((c) => c.square));
 
   const status = (() => {
     if (phase === 'setup') return 'Setting up new game';
@@ -355,10 +383,6 @@ export default function App() {
     return null;
   })();
 
-  const hintDisabled =
-    phase !== 'playing' || !!gameOver || !!finishingMate || !!pendingPromotion || thinking ||
-    (vsComputer && game.turn() === computerColor);
-
   const activeSide: 'w' | 'b' | null = gameOver
     ? null
     : finishingMate
@@ -367,16 +391,14 @@ export default function App() {
     ? game.turn()
     : null;
 
+  const baseHintBlocked =
+    phase !== 'playing' || !!gameOver || !!finishingMate || !!pendingPromotion || thinking;
+
   return (
     <div className="app">
       <div className="top-bar">
         <span className="turn-indicator">{status}</span>
-        {phase === 'playing' && (
-          <>
-            <button onClick={handleHint} disabled={hintDisabled}>Hint</button>
-            <button onClick={handleOpenSetup}>New game</button>
-          </>
-        )}
+        {phase === 'playing' && <button onClick={handleOpenSetup}>New game</button>}
       </div>
 
       {/* Black's own trophies (captured white pieces) sit below the board from Black's rotated view, i.e. at the top of the screen. */}
@@ -388,6 +410,9 @@ export default function App() {
           flipped
           paused={paused}
           onPauseToggle={handlePauseToggle}
+          onHintToggle={() => handleHintToggle('b')}
+          hintActive={!!hintMove && game.turn() === 'b'}
+          hintDisabled={baseHintBlocked || game.turn() !== 'b' || (vsComputer && computerColor === 'b')}
         />
         <CapturedPieces color="w" pieces={capturedWhite} advantage={blackAdvantage} flipped />
       </div>
@@ -399,6 +424,7 @@ export default function App() {
         onSquareTap={handleSquareTap}
         hintFrom={hintMove?.from}
         hintTo={hintMove?.to}
+        bloodSquares={bloodSquares}
       />
 
       {/* White's own trophies (captured black pieces) sit below the board from White's view, i.e. at the bottom of the screen. */}
@@ -410,6 +436,9 @@ export default function App() {
           active={active === 'white'}
           paused={paused}
           onPauseToggle={handlePauseToggle}
+          onHintToggle={() => handleHintToggle('w')}
+          hintActive={!!hintMove && game.turn() === 'w'}
+          hintDisabled={baseHintBlocked || game.turn() !== 'w' || (vsComputer && computerColor === 'w')}
         />
       </div>
 

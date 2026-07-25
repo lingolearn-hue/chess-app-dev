@@ -14,14 +14,34 @@ interface ClockProps {
   flipped?: boolean;
   paused: boolean;
   onPauseToggle: () => void;
+  onHintToggle: () => void;
+  hintActive: boolean;
+  hintDisabled: boolean;
 }
 
-export function ClockDisplay({ label, seconds, active, flipped, paused, onPauseToggle }: ClockProps) {
+export function ClockDisplay({
+  label,
+  seconds,
+  active,
+  flipped,
+  paused,
+  onPauseToggle,
+  onHintToggle,
+  hintActive,
+  hintDisabled,
+}: ClockProps) {
   const low = seconds <= 30;
   return (
-    <div className={`clock ${active ? 'active' : ''} ${low ? 'low' : ''} ${flipped ? 'flipped' : ''}`}>
-      <span className="clock-label">{label}</span>
+    <div className={`clock ${active ? 'active' : ''} ${low ? 'low' : ''} ${flipped ? 'flipped' : ''}`} aria-label={label}>
       <span className="clock-time">{formatTime(seconds)}</span>
+      <button
+        className={`hint-btn ${hintActive ? 'hint-btn-active' : ''}`}
+        onClick={onHintToggle}
+        disabled={hintDisabled}
+        aria-label="Hint"
+      >
+        💡
+      </button>
       <button className="pause-btn" onClick={onPauseToggle} aria-label={paused ? 'Resume' : 'Pause'}>
         {paused ? '▶' : '⏸'}
       </button>

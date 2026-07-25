@@ -76,6 +76,22 @@
   box-shadow: inset 0 0 0 3px #f5c518;
 }
 
+.square.blood::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+  opacity: 0.4;
+  background-image:
+    radial-gradient(circle at 28% 34%, #5a1010 0%, #5a1010 4%, transparent 5%),
+    radial-gradient(circle at 62% 22%, #5a1010 0%, #5a1010 3%, transparent 4%),
+    radial-gradient(circle at 71% 58%, #5a1010 0%, #5a1010 5%, transparent 6%),
+    radial-gradient(circle at 40% 68%, #5a1010 0%, #5a1010 3%, transparent 4%),
+    radial-gradient(circle at 20% 76%, #5a1010 0%, #5a1010 2.5%, transparent 3.5%),
+    radial-gradient(circle at 82% 40%, #5a1010 0%, #5a1010 2.5%, transparent 3.5%);
+}
+
 .top-bar button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
@@ -107,6 +123,8 @@
   align-items: center;
   justify-content: center;
   filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
+  position: relative;
+  z-index: 1;
 }
 
 .piece.b {
@@ -161,9 +179,27 @@
   padding: 0;
 }
 
-.clock-label {
-  font-size: 0.85rem;
-  opacity: 0.7;
+.hint-btn {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  border: none;
+  background: #3a3a3a;
+  cursor: pointer;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.hint-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.hint-btn-active {
+  background: #f5c518;
 }
 
 .clock-time {
@@ -183,7 +219,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 0.15rem;
   min-height: 1.6rem;
   width: min(85vh, 92vw);
@@ -193,6 +229,13 @@
   transform: rotate(180deg);
 }
 
+.captured-pieces-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.15rem;
+}
+
 .captured-piece {
   width: 1.3rem;
   height: 1.3rem;
@@ -200,9 +243,17 @@
 }
 
 .advantage {
-  margin-left: 0.4rem;
+  flex-shrink: 0;
+  min-width: 1.8rem;
+  text-align: right;
+  margin-right: 0.3rem;
   font-size: 0.8rem;
+  font-weight: 600;
   color: #7fd17f;
+}
+
+.advantage.negative {
+  color: #e04b4b;
 }
 
 .promotion-overlay {

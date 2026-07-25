@@ -10,14 +10,16 @@ interface Props {
 export default function CapturedPieces({ color, pieces, advantage, flipped }: Props) {
   return (
     <div className={`captured-row ${flipped ? 'flipped' : ''}`}>
-      {pieces.map((type, i) => (
-        <span key={i} className="captured-piece">
-          <PieceIcon type={type as any} color={color} />
-        </span>
-      ))}
-      {advantage !== 0 && (
-        <span className="advantage">{advantage > 0 ? `+${advantage}` : advantage}</span>
-      )}
+      <span className={`advantage ${advantage < 0 ? 'negative' : ''}`}>
+        {advantage !== 0 ? (advantage > 0 ? `+${advantage}` : advantage) : ''}
+      </span>
+      <span className="captured-pieces-list">
+        {pieces.map((type, i) => (
+          <span key={i} className="captured-piece">
+            <PieceIcon type={type as any} color={color} />
+          </span>
+        ))}
+      </span>
     </div>
   );
 }
