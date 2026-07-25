@@ -72,6 +72,7 @@ export default function App() {
   const [gameOver, setGameOver] = useState<GameOverState | null>(null);
   const [finishingMate, setFinishingMate] = useState<FinishingMate | null>(null);
   const [hintMove, setHintMove] = useState<{ from: string; to: string } | null>(null);
+  const [hintEnabled, setHintEnabled] = useState<{ w: boolean; b: boolean }>({ w: false, b: false });
   const [thinking, setThinking] = useState(false);
   // Tracked independently of chess.js's own history: the finishing king
   // capture replaces gameRef.current with a fresh instance (see below), which
@@ -311,16 +312,27 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [finishingMate, vsComputer, computerColor, finalizeKingCapture]);
 
-  const handleHintToggle = (side: 'w' | 'b') => {
-    if (phase !== 'playing' || gameOver || finishingMate || pendingPromotion || thinking) return;
-    if (game.turn() !== side) return;
-    if (hintMove) {
+  // A player's hint preference persists across their turns: once toggled on
+  // for a side, it stays on (recomputing the suggestion fresh) every time
+  // the turn comes back to them, until they toggle it off again.
+  useEffect(() => {
+    if (phase !== 'playing' || gameOver || finishingMate || pendingPromotion || thinking) {
       setHintMove(null);
       return;
     }
-    const scratch = new Chess(game.fen());
+    const turn = gameRef.current!.turn();
+    if (!hintEnabled[turn] || (vsComputer && computerColor === turn)) {
+      setHintMove(null);
+      return;
+    }
+    const scratch = new Chess(gameRef.current!.fen());
     const mv = findBestMove(scratch, DIFFICULTY_DEPTH[difficulty]);
-    if (mv) setHintMove({ from: mv.from, to: mv.to });
+    setHintMove(mv ? { from: mv.from, to: mv.to } : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tick, phase, gameOver, finishingMate, pendingPromotion, thinking, hintEnabled, vsComputer, computerColor, difficulty]);
+
+  const handleHintToggle = (side: 'w' | 'b') => {
+    setHintEnabled((prev) => ({ ...prev, [side]: !prev[side] }));
   };
 
   const handleOpenSetup = () => {
@@ -332,6 +344,7 @@ export default function App() {
     setGameOver(null);
     setFinishingMate(null);
     setHintMove(null);
+    setHintEnabled({ w: false, b: false });
     setThinking(false);
     setCaptureLog([]);
     setSetupMinutes(minutes);
@@ -410,8 +423,8 @@ export default function App() {
           paused={paused}
           onPauseToggle={handlePauseToggle}
           onHintToggle={() => handleHintToggle('b')}
-          hintActive={!!hintMove && game.turn() === 'b'}
-          hintDisabled={baseHintBlocked || game.turn() !== 'b' || (vsComputer && computerColor === 'b')}
+          hintActive={hintEnabled.b}
+          hintDisabled={baseHintBlocked || (vsComputer && computerColor === 'b')}
         />
         <CapturedPieces color="w" pieces={capturedWhite} advantage={blackAdvantage} flipped />
       </div>
@@ -436,8 +449,8 @@ export default function App() {
           paused={paused}
           onPauseToggle={handlePauseToggle}
           onHintToggle={() => handleHintToggle('w')}
-          hintActive={!!hintMove && game.turn() === 'w'}
-          hintDisabled={baseHintBlocked || game.turn() !== 'w' || (vsComputer && computerColor === 'w')}
+          hintActive={hintEnabled.w}
+          hintDisabled={baseHintBlocked || (vsComputer && computerColor === 'w')}
         />
       </div>
 
