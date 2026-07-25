@@ -72,6 +72,34 @@
   outline-offset: -3px;
 }
 
+.square.hint {
+  box-shadow: inset 0 0 0 3px #f5c518;
+}
+
+.top-bar button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.turn-indicator:empty {
+  display: none;
+}
+
+.player-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.3rem 0;
+  border-radius: 12px;
+  transition: background 0.2s, box-shadow 0.2s;
+}
+
+.player-panel.active-panel {
+  background: rgba(79, 168, 255, 0.1);
+  box-shadow: inset 0 0 0 2px rgba(79, 168, 255, 0.55);
+}
+
 .piece {
   width: min(9.5vh, 8.5vw);
   height: min(9.5vh, 8.5vw);

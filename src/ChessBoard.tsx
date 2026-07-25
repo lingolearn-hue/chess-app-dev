@@ -10,10 +10,17 @@ interface Props {
   selected: string | null;
   legalMoves: string[];
   onSquareTap: (square: string) => void;
+  hintFrom?: string | null;
+  hintTo?: string | null;
 }
 
-export default function ChessBoard({ game, selected, legalMoves, onSquareTap }: Props) {
-  const board = useMemo(() => game.board(), [game]);
+export default function ChessBoard({ game, selected, legalMoves, onSquareTap, hintFrom, hintTo }: Props) {
+  // `game` is a single mutated-in-place Chess instance (see App.tsx), so its
+  // object reference never changes between moves. Depending on `game` alone
+  // means this memo would never recompute after the first render. Depending
+  // on the FEN string instead correctly invalidates whenever the position changes.
+  const fen = game.fen();
+  const board = useMemo(() => game.board(), [fen]);
 
   const inCheckSquare = useMemo(() => {
     if (!game.inCheck()) return null;
@@ -26,7 +33,8 @@ export default function ChessBoard({ game, selected, legalMoves, onSquareTap }: 
       }
     }
     return null;
-  }, [game, board]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fen, board]);
 
   return (
     <div className="board">
@@ -39,6 +47,7 @@ export default function ChessBoard({ game, selected, legalMoves, onSquareTap }: 
           const isLegal = legalMoves.includes(square);
           const isCheck = inCheckSquare === square;
           const isCapture = isLegal && !!piece;
+          const isHint = hintFrom === square || hintTo === square;
 
           const classes = [
             'square',
@@ -47,6 +56,7 @@ export default function ChessBoard({ game, selected, legalMoves, onSquareTap }: 
             isLegal ? 'legal' : '',
             isCapture ? 'capture' : '',
             isCheck ? 'check' : '',
+            isHint ? 'hint' : '',
           ].filter(Boolean).join(' ');
 
           return (

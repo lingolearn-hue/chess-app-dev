@@ -4,12 +4,15 @@ import ChessBoard from './ChessBoard';
 import { ClockDisplay, useClockTicker } from './Clock';
 import CapturedPieces from './CapturedPieces';
 import PromotionPicker from './PromotionPicker';
+import { findBestMove, DIFFICULTY_DEPTH } from './engine';
 import { saveFen, loadFen, clearFen } from './storage';
 import './App.css';
 
 const PIECE_VALUE: Record<string, number> = { p: 1, n: 3, b: 3, r: 5, q: 9 };
 const TIME_CONTROLS = [5, 10, 15] as const;
 const DEFAULT_MINUTES = 10;
+
+type Difficulty = 'easy' | 'medium' | 'hard';
 
 function createGame(): Chess {
   const saved = loadFen();
@@ -62,13 +65,22 @@ export default function App() {
   const [pendingPromotion, setPendingPromotion] = useState<PendingPromotion | null>(null);
   const [gameOver, setGameOver] = useState<GameOverState | null>(null);
   const [finishingMate, setFinishingMate] = useState<FinishingMate | null>(null);
+  const [hintMove, setHintMove] = useState<{ from: string; to: string } | null>(null);
+  const [thinking, setThinking] = useState(false);
 
-  // New games start in 'setup' phase: time control + optional handicap
-  // (removing your own pieces) can only be adjusted here, before play begins.
+  // New games start in 'setup' phase: time control, opponent type, and the
+  // handicap piece-removal function can only be adjusted here, before play begins.
   const [phase, setPhase] = useState<Phase>('playing');
   const [setupMinutes, setSetupMinutes] = useState<number>(DEFAULT_MINUTES);
+  const [setupVsComputer, setSetupVsComputer] = useState(false);
+  const [setupComputerColor, setSetupComputerColor] = useState<'w' | 'b'>('b');
+  const [setupDifficulty, setSetupDifficulty] = useState<Difficulty>('medium');
 
   const [minutes, setMinutes] = useState<number>(DEFAULT_MINUTES);
+  const [vsComputer, setVsComputer] = useState(false);
+  const [computerColor, setComputerColor] = useState<'w' | 'b'>('b');
+  const [difficulty, setDifficulty] = useState<Difficulty>('medium');
+
   const [whiteSeconds, setWhiteSeconds] = useState(DEFAULT_MINUTES * 60);
   const [blackSeconds, setBlackSeconds] = useState(DEFAULT_MINUTES * 60);
   const [active, setActive] = useState<'white' | 'black' | null>(null);
@@ -117,6 +129,7 @@ export default function App() {
     }
     setSelected(null);
     setLegalMoves([]);
+    setHintMove(null);
 
     // Checkmate doesn't end the game by itself: the mated king is still on
     // the board. The winner must still tap a checking piece, then the king
@@ -203,7 +216,10 @@ export default function App() {
       return;
     }
 
-    if (gameOver || pendingPromotion) return;
+    if (gameOver || pendingPromotion || thinking) return;
+    if (vsComputer && game.turn() === computerColor) return; // wait for the computer's move
+
+    if (hintMove) setHintMove(null);
 
     if (selected) {
       if (legalMoves.includes(square)) {
@@ -234,13 +250,52 @@ export default function App() {
       setSelected(square);
       setLegalMoves(moves.map((m) => m.to));
     }
-  }, [game, selected, legalMoves, pendingPromotion, finalizeMove, phase, handleRemovePiece, gameOver, finishingMate, finalizeKingCapture]);
+  }, [game, selected, legalMoves, pendingPromotion, finalizeMove, phase, handleRemovePiece, gameOver, finishingMate, finalizeKingCapture, vsComputer, computerColor, thinking, hintMove]);
 
   const handlePromotionChoice = useCallback((piece: 'q' | 'r' | 'b' | 'n') => {
     if (!pendingPromotion) return;
     finalizeMove(pendingPromotion.from, pendingPromotion.to, piece);
     setPendingPromotion(null);
   }, [pendingPromotion, finalizeMove]);
+
+  // Computer's turn: think for a moment, then play a move via the normal path.
+  useEffect(() => {
+    if (phase !== 'playing') return;
+    if (gameOver || finishingMate || pendingPromotion) return;
+    if (!vsComputer) return;
+    if (gameRef.current!.turn() !== computerColor) return;
+
+    setThinking(true);
+    const timer = setTimeout(() => {
+      const scratch = new Chess(gameRef.current!.fen());
+      const mv = findBestMove(scratch, DIFFICULTY_DEPTH[difficulty]);
+      setThinking(false);
+      if (mv) finalizeMove(mv.from, mv.to, mv.promotion);
+    }, 400);
+    return () => {
+      clearTimeout(timer);
+      setThinking(false);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tick, phase, vsComputer, computerColor, difficulty, gameOver, finishingMate, pendingPromotion]);
+
+  // If the computer delivers checkmate, it finishes the game itself —
+  // there's no human at that seat to make the finishing tap.
+  useEffect(() => {
+    if (!finishingMate || !vsComputer || finishingMate.winnerColor !== computerColor) return;
+    const timer = setTimeout(() => {
+      finalizeKingCapture(finishingMate.attackerSquares[0], finishingMate.kingSquare);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [finishingMate, vsComputer, computerColor, finalizeKingCapture]);
+
+  const handleHint = () => {
+    if (phase !== 'playing' || gameOver || finishingMate || pendingPromotion || thinking) return;
+    if (vsComputer && game.turn() === computerColor) return;
+    const scratch = new Chess(game.fen());
+    const mv = findBestMove(scratch, DIFFICULTY_DEPTH[difficulty]);
+    if (mv) setHintMove({ from: mv.from, to: mv.to });
+  };
 
   const handleOpenSetup = () => {
     clearFen();
@@ -250,7 +305,12 @@ export default function App() {
     setPendingPromotion(null);
     setGameOver(null);
     setFinishingMate(null);
+    setHintMove(null);
+    setThinking(false);
     setSetupMinutes(minutes);
+    setSetupVsComputer(vsComputer);
+    setSetupComputerColor(computerColor);
+    setSetupDifficulty(difficulty);
     setActive(null);
     setPaused(false);
     setPhase('setup');
@@ -261,6 +321,9 @@ export default function App() {
     setMinutes(setupMinutes);
     setWhiteSeconds(setupMinutes * 60);
     setBlackSeconds(setupMinutes * 60);
+    setVsComputer(setupVsComputer);
+    setComputerColor(setupComputerColor);
+    setDifficulty(setupDifficulty);
     setActive(null);
     setPhase('playing');
   };
@@ -285,48 +348,70 @@ export default function App() {
     if (phase === 'setup') return 'Setting up new game';
     if (gameOver) return `${gameOver.winner === 'white' ? 'White' : 'Black'} wins by checkmate`;
     if (finishingMate) return 'Checkmate — capture the king to win';
+    if (thinking) return 'Computer is thinking…';
     if (game.isStalemate()) return 'Stalemate';
     if (game.isDraw()) return 'Draw';
     if (game.inCheck()) return 'Check';
     return null;
   })();
 
+  const hintDisabled =
+    phase !== 'playing' || !!gameOver || !!finishingMate || !!pendingPromotion || thinking ||
+    (vsComputer && game.turn() === computerColor);
+
+  const activeSide: 'w' | 'b' | null = gameOver
+    ? null
+    : finishingMate
+    ? finishingMate.winnerColor
+    : phase === 'playing'
+    ? game.turn()
+    : null;
+
   return (
     <div className="app">
       <div className="top-bar">
-        <span className="turn-indicator">
-          {status ? status : `${game.turn() === 'w' ? 'White' : 'Black'} to move`}
-        </span>
-        {phase === 'playing' && <button onClick={handleOpenSetup}>New game</button>}
+        <span className="turn-indicator">{status}</span>
+        {phase === 'playing' && (
+          <>
+            <button onClick={handleHint} disabled={hintDisabled}>Hint</button>
+            <button onClick={handleOpenSetup}>New game</button>
+          </>
+        )}
       </div>
 
       {/* Black's own trophies (captured white pieces) sit below the board from Black's rotated view, i.e. at the top of the screen. */}
-      <ClockDisplay
-        label="Black"
-        seconds={blackSeconds}
-        active={active === 'black'}
-        flipped
-        paused={paused}
-        onPauseToggle={handlePauseToggle}
-      />
-      <CapturedPieces color="w" pieces={capturedWhite} advantage={blackAdvantage} flipped />
+      <div className={`player-panel ${activeSide === 'b' ? 'active-panel' : ''}`}>
+        <ClockDisplay
+          label="Black"
+          seconds={blackSeconds}
+          active={active === 'black'}
+          flipped
+          paused={paused}
+          onPauseToggle={handlePauseToggle}
+        />
+        <CapturedPieces color="w" pieces={capturedWhite} advantage={blackAdvantage} flipped />
+      </div>
 
       <ChessBoard
         game={game}
         selected={selected}
         legalMoves={legalMoves}
         onSquareTap={handleSquareTap}
+        hintFrom={hintMove?.from}
+        hintTo={hintMove?.to}
       />
 
       {/* White's own trophies (captured black pieces) sit below the board from White's view, i.e. at the bottom of the screen. */}
-      <CapturedPieces color="b" pieces={capturedBlack} advantage={whiteAdvantage} />
-      <ClockDisplay
-        label="White"
-        seconds={whiteSeconds}
-        active={active === 'white'}
-        paused={paused}
-        onPauseToggle={handlePauseToggle}
-      />
+      <div className={`player-panel ${activeSide === 'w' ? 'active-panel' : ''}`}>
+        <CapturedPieces color="b" pieces={capturedBlack} advantage={whiteAdvantage} />
+        <ClockDisplay
+          label="White"
+          seconds={whiteSeconds}
+          active={active === 'white'}
+          paused={paused}
+          onPauseToggle={handlePauseToggle}
+        />
+      </div>
 
       {phase === 'setup' && (
         <div className="setup-overlay">
@@ -343,6 +428,46 @@ export default function App() {
                 </button>
               ))}
             </div>
+
+            <div className="time-controls">
+              <button className={!setupVsComputer ? 'active-tc' : ''} onClick={() => setSetupVsComputer(false)}>
+                Two Players
+              </button>
+              <button className={setupVsComputer ? 'active-tc' : ''} onClick={() => setSetupVsComputer(true)}>
+                Vs Computer
+              </button>
+            </div>
+
+            {setupVsComputer && (
+              <>
+                <div className="time-controls">
+                  <button
+                    className={setupComputerColor === 'w' ? 'active-tc' : ''}
+                    onClick={() => setSetupComputerColor('w')}
+                  >
+                    Computer: White
+                  </button>
+                  <button
+                    className={setupComputerColor === 'b' ? 'active-tc' : ''}
+                    onClick={() => setSetupComputerColor('b')}
+                  >
+                    Computer: Black
+                  </button>
+                </div>
+                <div className="time-controls">
+                  {(['easy', 'medium', 'hard'] as Difficulty[]).map((d) => (
+                    <button
+                      key={d}
+                      className={setupDifficulty === d ? 'active-tc' : ''}
+                      onClick={() => setSetupDifficulty(d)}
+                    >
+                      {d[0].toUpperCase() + d.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
             <p className="setup-hint">
               Optional: tap pieces on the board to remove them as a handicap. This is only possible now, before the game starts.
             </p>
