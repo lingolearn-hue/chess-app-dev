@@ -68,6 +68,7 @@ export default function App() {
 
   const [selected, setSelected] = useState<string | null>(null);
   const [legalMoves, setLegalMoves] = useState<string[]>([]);
+  const [lastMove, setLastMove] = useState<{ from: string; to: string } | null>(null);
   const [pendingPromotion, setPendingPromotion] = useState<PendingPromotion | null>(null);
   const [gameOver, setGameOver] = useState<GameOverState | null>(null);
   const [finishingMate, setFinishingMate] = useState<FinishingMate | null>(null);
@@ -150,6 +151,7 @@ export default function App() {
     setSelected(null);
     setLegalMoves([]);
     setHintMove(null);
+    setLastMove({ from, to });
 
     // Checkmate doesn't end the game by itself: the mated king is still on
     // the board. The winner must still tap a checking piece, then the king
@@ -205,6 +207,7 @@ export default function App() {
     setActive(null);
     setSelected(null);
     setLegalMoves([]);
+    setLastMove({ from, to });
     setGameOver({
       winner: finishingMate.winnerColor === 'w' ? 'white' : 'black',
       reason: 'checkmate',
@@ -347,6 +350,7 @@ export default function App() {
     setHintEnabled({ w: false, b: false });
     setThinking(false);
     setCaptureLog([]);
+    setLastMove(null);
     setSetupMinutes(minutes);
     setSetupVsComputer(vsComputer);
     setSetupComputerColor(computerColor);
@@ -437,6 +441,7 @@ export default function App() {
         hintFrom={hintMove?.from}
         hintTo={hintMove?.to}
         bloodMap={bloodMap}
+        lastMove={lastMove}
       />
 
       {/* White's own trophies (captured black pieces) sit below the board from White's view, i.e. at the bottom of the screen. */}
