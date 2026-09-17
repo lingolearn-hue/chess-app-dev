@@ -1,0 +1,258 @@
+.home-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  width: 100vw;
+  background: #1a1a1a;
+  color: #eee;
+  font-family: system-ui, sans-serif;
+  gap: 1rem;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.home-title {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+}
+
+.home-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+  width: min(80vw, 360px);
+  padding: 1rem 1.2rem;
+  border-radius: 14px;
+  border: none;
+  background: #2a2a2a;
+  color: #eee;
+  cursor: pointer;
+  text-align: left;
+}
+
+.home-tile:active {
+  background: #3a3a3a;
+}
+
+.home-tile-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.home-tile-sub {
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+
+.back-btn {
+  position: fixed;
+  top: 0.6rem;
+  left: 0.6rem;
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  border: none;
+  background: #3a3a3a;
+  color: #eee;
+  cursor: pointer;
+  z-index: 3;
+}
+
+.opponent-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  width: 100vw;
+  background: #1a1a1a;
+  color: #eee;
+  font-family: system-ui, sans-serif;
+  gap: 0.4rem;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.opponent-portrait {
+  width: 6rem;
+  height: 6rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.2rem;
+  margin-bottom: 0.5rem;
+}
+
+.opponent-portrait.small {
+  width: 3.5rem;
+  height: 3.5rem;
+  padding: 0.7rem;
+}
+
+.opponent-name {
+  font-size: 1.3rem;
+}
+
+.opponent-meta {
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+.opponent-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.opponent-actions button {
+  padding: 0.5rem 0.9rem;
+  border-radius: 8px;
+  border: none;
+  background: #3a3a3a;
+  color: #eee;
+  cursor: pointer;
+}
+
+.opponent-actions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.play-btn {
+  background: #4fa8ff !important;
+  color: #111 !important;
+  font-weight: 700;
+}
+
+.lesson-screen,
+.story-game-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  width: 100vw;
+  background: #1a1a1a;
+  color: #eee;
+  font-family: system-ui, sans-serif;
+  gap: 0.5rem;
+  overflow: hidden;
+  touch-action: none;
+  padding: 0 1rem;
+  box-sizing: border-box;
+  text-align: center;
+}
+
+.lesson-screen h2 {
+  font-size: 1.2rem;
+}
+
+.lesson-text {
+  font-size: 0.9rem;
+  max-width: 26rem;
+  opacity: 0.9;
+}
+
+.lesson-feedback {
+  font-size: 0.85rem;
+  color: #e04b4b;
+}
+
+.dialogue-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.dialogue-line {
+  font-size: 1rem;
+  font-style: italic;
+  max-width: 24rem;
+}
+
+.rating-change {
+  font-size: 0.85rem;
+  opacity: 0.85;
+}
+
+.story-home-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100vh;
+  width: 100vw;
+  background: #1a1a1a;
+  color: #eee;
+  font-family: system-ui, sans-serif;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 3.5rem 1rem 1rem;
+  box-sizing: border-box;
+  gap: 0.4rem;
+}
+
+.xp-total {
+  font-size: 0.9rem;
+  opacity: 0.8;
+  margin-bottom: 0.5rem;
+}
+
+.opponent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: min(90vw, 420px);
+}
+
+.opponent-row {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.6rem;
+  border-radius: 12px;
+  border: none;
+  background: #2a2a2a;
+  color: #eee;
+  cursor: pointer;
+  text-align: left;
+}
+
+.opponent-row.locked {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.opponent-row-portrait {
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+}
+
+.lock-icon {
+  font-size: 1rem;
+}
+
+.opponent-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.opponent-row-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.opponent-row-meta {
+  font-size: 0.75rem;
+  opacity: 0.7;
+}

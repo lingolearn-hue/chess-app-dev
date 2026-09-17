@@ -163,3 +163,24 @@ export const DIFFICULTY_DEPTH: Record<'easy' | 'medium' | 'hard', number> = {
   medium: 2,
   hard: 3,
 };
+
+export interface EngineStrength {
+  depth: number;
+  // Probability (0-1) of playing a random legal move instead of the
+  // engine's best move. Three search-depth tiers alone can't distinguish
+  // eight opponents, so weaker characters additionally blunder more often —
+  // this is what actually makes the earliest opponents feel beatable.
+  blunderChance: number;
+}
+
+export function findMoveForStrength(game: Chess, strength: EngineStrength): EngineMove | null {
+  const moves = game.moves({ verbose: true }) as any[];
+  if (moves.length === 0) return null;
+
+  if (Math.random() < strength.blunderChance) {
+    const m = moves[Math.floor(Math.random() * moves.length)];
+    return { from: m.from, to: m.to, promotion: m.promotion };
+  }
+
+  return findBestMove(game, strength.depth);
+}
