@@ -9,6 +9,13 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
+      workbox: {
+        // Default globPatterns misses the portrait images (hashed .png
+        // assets under /assets), leaving them uncached and unavailable
+        // offline. Explicit patterns ensure everything the app actually
+        // ships — including character art — is precached.
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
+      },
       manifest: {
         name: 'Single Phone Chess',
         short_name: 'Chess',

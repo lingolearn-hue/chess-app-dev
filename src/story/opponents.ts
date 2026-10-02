@@ -1,3 +1,18 @@
+// Eagerly loads every sliced portrait crop from the character sheet as a
+// resolved asset URL, keyed by its file path.
+const portraitModules = import.meta.glob('../assets/portraits/*.png', { eager: true, import: 'default' }) as Record<string, string>;
+
+function portraitsFor(id: string) {
+  const get = (expr: string) => portraitModules[`../assets/portraits/${id}-${expr}.png`];
+  return {
+    neutral: get('neutral'),
+    capturedPiece: get('capturedPiece'),
+    lostPiece: get('lostPiece'),
+    won: get('won'),
+    lost: get('lost'),
+  };
+}
+
 export interface Opponent {
   id: string;
   name: string;
@@ -10,14 +25,14 @@ export interface Opponent {
   // what makes them actually play at noticeably different strengths.
   engineStrength: { depth: number; blunderChance: number };
   color: string;
-  // Paths to the portrait image for each expression, once real art is
-  // sliced in from the character sheet. Undefined falls back to the
-  // placeholder (colored circle + piece icon) used everywhere portraits
-  // render today, so this is safe to leave empty until assets exist.
+  // Portrait image for each expression. Undefined falls back to the
+  // placeholder (colored circle + piece icon).
   portraits?: {
     neutral?: string;
-    happy?: string;
-    sad?: string;
+    capturedPiece?: string; // opponent's reaction to capturing one of the player's pieces
+    lostPiece?: string; // opponent's reaction to having their own piece captured
+    won?: string; // opponent's reaction to winning the game
+    lost?: string; // opponent's reaction to losing the game
   };
   preGameLines: string[];
   winLines: string[]; // opponent's line when the opponent wins
@@ -38,6 +53,7 @@ export const OPPONENTS: Opponent[] = [
     difficulty: 'easy',
     engineStrength: { depth: 1, blunderChance: 0.35 },
     color: '#4a6fa5',
+    portraits: portraitsFor('king_leo'),
     preGameLines: [
       "I may be slow, but I've never given up my throne without a fight.",
       "Let's see what you've got, challenger.",
@@ -55,6 +71,7 @@ export const OPPONENTS: Opponent[] = [
     difficulty: 'easy',
     engineStrength: { depth: 1, blunderChance: 0.18 },
     color: '#5a8f5a',
+    portraits: portraitsFor('pawn_penny'),
     preGameLines: ['One square at a time — that\u2019s how I get ahead.', 'Small steps win big games.'],
     winLines: ['Slow and steady! Better luck next time.', 'Patience pays off.'],
     loseLines: ['You broke through my structure. Nicely done!', 'A well-earned win.'],
@@ -70,6 +87,7 @@ export const OPPONENTS: Opponent[] = [
     difficulty: 'medium',
     engineStrength: { depth: 2, blunderChance: 0.12 },
     color: '#8a5a3a',
+    portraits: portraitsFor('knight_nico'),
     preGameLines: ['Ready for some tricky jumps?', 'I like it complicated.'],
     winLines: ['Forked you! Try again sometime.', 'Knights see angles others miss.'],
     loseLines: ['You saw through my tactics — well played!', 'Sharp game. You earned that.'],
@@ -85,6 +103,7 @@ export const OPPONENTS: Opponent[] = [
     difficulty: 'medium',
     engineStrength: { depth: 2, blunderChance: 0.06 },
     color: '#6a4a8a',
+    portraits: portraitsFor('bishop_bea'),
     preGameLines: ['I do like a good open diagonal.', 'Let\u2019s keep this elegant.'],
     winLines: ['Straight down the diagonal! Good effort.', 'Precision wins the day.'],
     loseLines: ['A beautifully played game — you\u2019ve got my respect.', 'Well played indeed.'],
@@ -100,6 +119,7 @@ export const OPPONENTS: Opponent[] = [
     difficulty: 'medium',
     engineStrength: { depth: 2, blunderChance: 0.0 },
     color: '#a05a5a',
+    portraits: portraitsFor('rook_rex'),
     preGameLines: ['Open files are my domain.', 'Straightforward and strong — that\u2019s my style.'],
     winLines: ['Ruled that file! Try again.', 'Simplicity wins.'],
     loseLines: ['You controlled the position better than I did.', 'A clean, deserved win.'],
@@ -115,6 +135,7 @@ export const OPPONENTS: Opponent[] = [
     difficulty: 'hard',
     engineStrength: { depth: 3, blunderChance: 0.0 },
     color: '#a05a9a',
+    portraits: portraitsFor('queen_quinn'),
     preGameLines: ['I don\u2019t lose often.', 'Show me what you\u2019ve learned.'],
     winLines: ['Royalty has its privileges. Well fought, though.', 'A worthy attempt.'],
     loseLines: ['You\u2019ve truly earned this one — congratulations!', 'A masterful game.'],
@@ -130,6 +151,7 @@ export const OPPONENTS: Opponent[] = [
     difficulty: 'hard',
     engineStrength: { depth: 3, blunderChance: 0.0 },
     color: '#3a3a6a',
+    portraits: portraitsFor('advanced_ada'),
     preGameLines: ['Let\u2019s see if you\u2019ve mastered the fundamentals.', 'This will be a real test.'],
     winLines: ['A good effort — refine your technique and try again.', 'You\u2019re close. Keep at it.'],
     loseLines: ['Outstanding play — you\u2019ve earned this win.', 'Truly excellent chess.'],
@@ -145,6 +167,7 @@ export const OPPONENTS: Opponent[] = [
     difficulty: 'hard',
     engineStrength: { depth: 3, blunderChance: 0.0 },
     color: '#1a1a1a',
+    portraits: portraitsFor('grandmaster_zed'),
     preGameLines: ['Few make it this far.', 'Let\u2019s find out what you\u2019re truly made of.'],
     winLines: ['A respectable challenge. Return when you\u2019re ready.', 'Not bad — but not enough.'],
     loseLines: ['You have bested a Grandmaster. Remarkable.', 'A historic win — well done.'],

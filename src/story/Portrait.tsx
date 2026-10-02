@@ -1,7 +1,7 @@
 import PieceIcon from '../PieceIcon';
 import type { Opponent } from './opponents';
 
-type Expression = 'neutral' | 'happy' | 'sad';
+type Expression = 'neutral' | 'capturedPiece' | 'lostPiece' | 'won' | 'lost';
 
 interface Props {
   opponent: Opponent;

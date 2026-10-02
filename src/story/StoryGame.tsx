@@ -48,11 +48,29 @@ export default function StoryGame({ opponent, onDone, onBack }: Props) {
   const [hintUsed, setHintUsed] = useState(false);
   const [hintMove, setHintMove] = useState<{ from: string; to: string } | null>(null);
 
+  // Brief portrait reaction right after a capture, before settling back to neutral.
+  const [transientExpression, setTransientExpression] = useState<'capturedPiece' | 'lostPiece' | null>(null);
+  const transientTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (transientTimerRef.current) clearTimeout(transientTimerRef.current);
+    };
+  }, []);
+
   const finalizeMove = useCallback((from: string, to: string, promotion?: 'q' | 'r' | 'b' | 'n') => {
+    let moveResult: any;
     try {
-      gameRef.current!.move({ from, to, promotion: promotion ?? 'q' });
+      moveResult = gameRef.current!.move({ from, to, promotion: promotion ?? 'q' });
     } catch {
       return;
+    }
+    if (moveResult?.captured) {
+      // Player (white) captured a piece -> the opponent lost one.
+      // Computer (black) captured a piece -> the opponent captured one of ours.
+      setTransientExpression(moveResult.color === 'w' ? 'lostPiece' : 'capturedPiece');
+      if (transientTimerRef.current) clearTimeout(transientTimerRef.current);
+      transientTimerRef.current = setTimeout(() => setTransientExpression(null), 1500);
     }
     setSelected(null);
     setLegalMoves([]);
@@ -204,7 +222,13 @@ export default function StoryGame({ opponent, onDone, onBack }: Props) {
       {/* Always-present header: the board never shifts when dialogue or
           status text changes, since this row has a fixed reserved height. */}
       <div className="story-game-header">
-        <Portrait opponent={opponent} size="small" expression={result === 'win' ? 'sad' : result === 'loss' ? 'happy' : 'neutral'} />
+        <Portrait
+          opponent={opponent}
+          size="small"
+          expression={
+            result === 'win' ? 'lost' : result === 'loss' ? 'won' : transientExpression ?? 'neutral'
+          }
+        />
         <div className="story-game-header-text">
           <span className="story-game-opponent-name">{opponent.name}</span>
           <span className="lesson-text">{headerText}</span>
