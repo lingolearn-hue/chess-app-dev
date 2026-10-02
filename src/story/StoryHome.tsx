@@ -1,4 +1,4 @@
-import PieceIcon from '../PieceIcon';
+import Portrait from './Portrait';
 import { OPPONENTS } from './opponents';
 import { isUnlocked, loadOpponentRecord, loadXp } from './storyStorage';
 
@@ -27,9 +27,15 @@ export default function StoryHome({ onSelectOpponent, onBack }: Props) {
               onClick={() => unlocked && onSelectOpponent(opponent.id)}
               disabled={!unlocked}
             >
-              <span className="opponent-row-portrait" style={{ background: opponent.color }}>
-                {unlocked ? <PieceIcon type={opponent.pieceTheme} color="w" /> : <span className="lock-icon">🔒</span>}
-              </span>
+              {unlocked ? (
+                <span className="opponent-row-portrait-wrap">
+                  <Portrait opponent={opponent} size="small" />
+                </span>
+              ) : (
+                <span className="opponent-row-portrait" style={{ background: opponent.color }}>
+                  <span className="lock-icon">🔒</span>
+                </span>
+              )}
               <span className="opponent-row-info">
                 <span className="opponent-row-name">{opponent.name}</span>
                 <span className="opponent-row-meta">

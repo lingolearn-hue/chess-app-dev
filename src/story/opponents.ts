@@ -10,6 +10,15 @@ export interface Opponent {
   // what makes them actually play at noticeably different strengths.
   engineStrength: { depth: number; blunderChance: number };
   color: string;
+  // Paths to the portrait image for each expression, once real art is
+  // sliced in from the character sheet. Undefined falls back to the
+  // placeholder (colored circle + piece icon) used everywhere portraits
+  // render today, so this is safe to leave empty until assets exist.
+  portraits?: {
+    neutral?: string;
+    happy?: string;
+    sad?: string;
+  };
   preGameLines: string[];
   winLines: string[]; // opponent's line when the opponent wins
   loseLines: string[]; // opponent's line when the opponent loses

@@ -76,7 +76,9 @@ export default function PuzzleScreen({ puzzle, onDone, onBack }: Props) {
         onSquareTap={handleSquareTap}
       />
 
-      {solved && <button className="play-btn" onClick={onDone}>Continue</button>}
+      <div className="action-slot">
+        {solved && <button className="play-btn" onClick={onDone}>Continue</button>}
+      </div>
     </div>
   );
 }

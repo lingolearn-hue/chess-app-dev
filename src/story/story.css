@@ -92,6 +92,13 @@
   padding: 0.7rem;
 }
 
+.opponent-portrait-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
 .opponent-name {
   font-size: 1.3rem;
 }
@@ -154,11 +161,22 @@
   font-size: 0.9rem;
   max-width: 26rem;
   opacity: 0.9;
+  min-height: 2.6rem;
 }
 
 .lesson-feedback {
   font-size: 0.85rem;
   color: #e04b4b;
+  min-height: 1.2rem;
+}
+
+/* Always rendered (even empty) so the Continue/Done button appearing after
+   a lesson/puzzle/practice game completes doesn't shift the board above it. */
+.action-slot {
+  min-height: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .dialogue-panel {
@@ -177,6 +195,89 @@
 .rating-change {
   font-size: 0.85rem;
   opacity: 0.85;
+}
+
+/* Persistent header above the board in Story Mode games: always present
+   (fixed min-height) so dialogue, thinking status, etc. never shift the
+   board's position. */
+.story-game-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: min(85vh, 92vw);
+  min-height: 3.6rem;
+  padding: 0.2rem 0;
+}
+
+.story-game-header-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.story-game-opponent-name {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.story-game-header .lesson-text {
+  margin: 0;
+  max-width: none;
+  text-align: left;
+  min-height: 0;
+}
+
+.hint-toggle-btn {
+  flex-shrink: 0;
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  border: none;
+  background: #3a3a3a;
+  color: #eee;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.hint-toggle-btn.hint-btn-active {
+  background: #f5c518;
+  color: #111;
+}
+
+.practice-header-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: min(85vh, 92vw);
+}
+
+.practice-header-row .lesson-text {
+  flex: 1;
+  text-align: left;
+  margin: 0;
+}
+
+/* Dialogue (pre-game / post-game) floats on top of the board instead of
+   replacing it in the layout, so the board never shifts or disappears
+   when dialogue appears. */
+.dialogue-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9;
+  padding: 1rem;
+}
+
+.dialogue-overlay .dialogue-panel {
+  background: #2a2a2a;
+  padding: 1.5rem;
+  border-radius: 14px;
+  max-width: 22rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
 }
 
 .story-home-screen {
@@ -234,6 +335,18 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 0.5rem;
+}
+
+.opponent-row-portrait-wrap {
+  width: 2.6rem;
+  height: 2.6rem;
+  flex-shrink: 0;
+}
+
+.opponent-row-portrait-wrap .opponent-portrait {
+  width: 100%;
+  height: 100%;
   padding: 0.5rem;
 }
 

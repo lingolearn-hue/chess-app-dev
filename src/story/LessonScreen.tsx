@@ -105,7 +105,9 @@ export default function LessonScreen({ lesson, onDone, onBack }: Props) {
         onSquareTap={handleSquareTap}
       />
 
-      {complete && <button className="play-btn" onClick={onDone}>Continue</button>}
+      <div className="action-slot">
+        {complete && <button className="play-btn" onClick={onDone}>Continue</button>}
+      </div>
     </div>
   );
 }

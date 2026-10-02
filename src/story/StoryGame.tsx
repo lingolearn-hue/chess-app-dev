@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Chess } from 'chess.js';
 import ChessBoard from '../ChessBoard';
 import PromotionPicker from '../PromotionPicker';
-import PieceIcon from '../PieceIcon';
-import { findMoveForStrength } from '../engine';
+import Portrait from './Portrait';
+import { findMoveForStrength, findBestMove, DIFFICULTY_DEPTH } from '../engine';
+import { computeGuardAttackInfo } from '../analysis';
 import type { Opponent } from './opponents';
 import { expectedScore, updateRating } from './rating';
 import { loadPlayerRating, savePlayerRating, loadOpponentRecord, saveOpponentRecord, addXp } from './storyStorage';
@@ -38,6 +39,14 @@ export default function StoryGame({ opponent, onDone, onBack }: Props) {
   const [postLine, setPostLine] = useState('');
   const [ratingDelta, setRatingDelta] = useState(0);
   const [playerRating, setPlayerRating] = useState(() => loadPlayerRating());
+  const [ratingCounted, setRatingCounted] = useState(true);
+
+  // Using a hint at any point this game disqualifies it from affecting
+  // rating or the win/loss record — tracked for the whole game, not just
+  // the move it was used on.
+  const [hintEnabled, setHintEnabled] = useState(false);
+  const [hintUsed, setHintUsed] = useState(false);
+  const [hintMove, setHintMove] = useState<{ from: string; to: string } | null>(null);
 
   const finalizeMove = useCallback((from: string, to: string, promotion?: 'q' | 'r' | 'b' | 'n') => {
     try {
@@ -112,6 +121,37 @@ export default function StoryGame({ opponent, onDone, onBack }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick, phase, pendingPromotion, opponent.engineStrength, finalizeMove]);
 
+  // Hint: recomputed whenever it's the player's (White's) turn and the
+  // toggle is on. Toggling it on at all marks this game as hint-assisted.
+  useEffect(() => {
+    if (phase !== 'playing' || pendingPromotion || thinking) {
+      setHintMove(null);
+      return;
+    }
+    if (!hintEnabled || game.turn() !== 'w') {
+      setHintMove(null);
+      return;
+    }
+    const scratch = new Chess(game.fen());
+    const mv = findBestMove(scratch, DIFFICULTY_DEPTH.medium);
+    setHintMove(mv ? { from: mv.from, to: mv.to } : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tick, phase, pendingPromotion, thinking, hintEnabled]);
+
+  const handleHintToggle = () => {
+    setHintEnabled((v) => !v);
+    setHintUsed(true);
+  };
+
+  // Guard/attack overlay for the player's own (White) pieces, shown whenever
+  // the hint toggle is on — useful any time, not just on the player's turn.
+  const fenForAnalysis = game.fen();
+  const guardAttackInfo = useMemo(
+    () => (hintEnabled ? computeGuardAttackInfo(game, 'w') : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [fenForAnalysis, hintEnabled]
+  );
+
   // Detect game end and settle the result once.
   useEffect(() => {
     if (phase !== 'playing') return;
@@ -125,18 +165,24 @@ export default function StoryGame({ opponent, onDone, onBack }: Props) {
     }
     setResult(r);
 
-    const actual = r === 'win' ? 1 : r === 'draw' ? 0.5 : 0;
-    const expected = expectedScore(playerRating, opponent.rating);
-    const newRating = updateRating(playerRating, expected, actual);
-    setRatingDelta(newRating - playerRating);
-    setPlayerRating(newRating);
-    savePlayerRating(newRating);
+    if (hintUsed) {
+      // Hints were used this game: no rating or record change, just XP for playing.
+      setRatingCounted(false);
+      setRatingDelta(0);
+    } else {
+      const actual = r === 'win' ? 1 : r === 'draw' ? 0.5 : 0;
+      const expected = expectedScore(playerRating, opponent.rating);
+      const newRating = updateRating(playerRating, expected, actual);
+      setRatingDelta(newRating - playerRating);
+      setPlayerRating(newRating);
+      savePlayerRating(newRating);
 
-    const record = loadOpponentRecord(opponent.id);
-    if (r === 'win') record.wins += 1;
-    else if (r === 'loss') record.losses += 1;
-    else record.draws += 1;
-    saveOpponentRecord(opponent.id, record);
+      const record = loadOpponentRecord(opponent.id);
+      if (r === 'win') record.wins += 1;
+      else if (r === 'loss') record.losses += 1;
+      else record.draws += 1;
+      saveOpponentRecord(opponent.id, record);
+    }
     addXp(r === 'win' ? 20 : 5);
 
     setPostLine(r === 'win' ? pick(opponent.loseLines) : r === 'loss' ? pick(opponent.winLines) : pick(opponent.drawLines));
@@ -144,49 +190,70 @@ export default function StoryGame({ opponent, onDone, onBack }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick, phase]);
 
+  const headerText = (() => {
+    if (phase === 'pre-dialogue') return `"${preLine}"`;
+    if (phase === 'post-dialogue') return `"${postLine}"`;
+    if (thinking) return `${opponent.name} is thinking…`;
+    return 'Your move';
+  })();
+
   return (
     <div className="story-game-screen">
       <button className="back-btn" onClick={onBack}>← Back</button>
 
-      {phase === 'pre-dialogue' && (
-        <div className="dialogue-panel">
-          <div className="opponent-portrait small" style={{ background: opponent.color }}>
-            <PieceIcon type={opponent.pieceTheme} color="w" />
-          </div>
-          <p className="dialogue-line">"{preLine}"</p>
-          <button className="play-btn" onClick={() => setPhase('playing')}>Begin</button>
+      {/* Always-present header: the board never shifts when dialogue or
+          status text changes, since this row has a fixed reserved height. */}
+      <div className="story-game-header">
+        <Portrait opponent={opponent} size="small" expression={result === 'win' ? 'sad' : result === 'loss' ? 'happy' : 'neutral'} />
+        <div className="story-game-header-text">
+          <span className="story-game-opponent-name">{opponent.name}</span>
+          <span className="lesson-text">{headerText}</span>
         </div>
-      )}
+        {phase === 'playing' && (
+          <button
+            className={`hint-toggle-btn ${hintEnabled ? 'hint-btn-active' : ''}`}
+            onClick={handleHintToggle}
+            title="Hints disable rating/record changes for this game"
+          >
+            💡 Hint
+          </button>
+        )}
+      </div>
 
-      {phase !== 'pre-dialogue' && (
-        <>
-          <p className="lesson-text">
-            {phase === 'playing' ? (thinking ? `${opponent.name} is thinking…` : 'Your move') : null}
-          </p>
-          <ChessBoard
-            game={game}
-            selected={selected}
-            legalMoves={legalMoves}
-            onSquareTap={handleSquareTap}
-          />
-        </>
-      )}
+      <ChessBoard
+        game={game}
+        selected={selected}
+        legalMoves={legalMoves}
+        onSquareTap={handleSquareTap}
+        hintFrom={hintMove?.from}
+        hintTo={hintMove?.to}
+        analysisLines={guardAttackInfo?.lines}
+        analysisTint={guardAttackInfo?.tint}
+      />
 
       {pendingPromotion && (
         <PromotionPicker color={pendingPromotion.color} onChoose={handlePromotionChoice} />
       )}
 
-      {phase === 'post-dialogue' && (
-        <div className="dialogue-panel">
-          <div className="opponent-portrait small" style={{ background: opponent.color }}>
-            <PieceIcon type={opponent.pieceTheme} color="w" />
+      {phase === 'pre-dialogue' && (
+        <div className="dialogue-overlay">
+          <div className="dialogue-panel">
+            <button className="play-btn" onClick={() => setPhase('playing')}>Begin</button>
           </div>
-          <p className="dialogue-line">"{postLine}"</p>
-          <p className="rating-change">
-            {result === 'win' ? 'You won!' : result === 'loss' ? 'You lost.' : 'Draw.'}{' '}
-            Rating: {playerRating - ratingDelta} → {playerRating} ({ratingDelta >= 0 ? '+' : ''}{ratingDelta})
-          </p>
-          <button className="play-btn" onClick={onDone}>Continue</button>
+        </div>
+      )}
+
+      {phase === 'post-dialogue' && (
+        <div className="dialogue-overlay">
+          <div className="dialogue-panel">
+            <p className="rating-change">
+              {result === 'win' ? 'You won!' : result === 'loss' ? 'You lost.' : 'Draw.'}{' '}
+              {ratingCounted
+                ? `Rating: ${playerRating - ratingDelta} → ${playerRating} (${ratingDelta >= 0 ? '+' : ''}${ratingDelta})`
+                : 'Hints were used — no rating or record change this game.'}
+            </p>
+            <button className="play-btn" onClick={onDone}>Continue</button>
+          </div>
         </div>
       )}
     </div>

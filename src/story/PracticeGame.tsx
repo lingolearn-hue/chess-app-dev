@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Chess } from 'chess.js';
 import ChessBoard from '../ChessBoard';
 import PromotionPicker from '../PromotionPicker';
 import { findBestMove, DIFFICULTY_DEPTH } from '../engine';
+import { computeGuardAttackInfo } from '../analysis';
 
 interface Props {
   title: string;
@@ -28,6 +29,8 @@ export default function PracticeGame({ title, objective, fen, onBack }: Props) {
   const [pendingPromotion, setPendingPromotion] = useState<{ from: string; to: string; color: 'w' | 'b' } | null>(null);
   const [thinking, setThinking] = useState(false);
   const [status, setStatus] = useState<Status>('playing');
+  const [hintEnabled, setHintEnabled] = useState(false);
+  const [hintMove, setHintMove] = useState<{ from: string; to: string } | null>(null);
 
   const finalizeMove = useCallback((from: string, to: string, promotion?: 'q' | 'r' | 'b' | 'n') => {
     try {
@@ -101,6 +104,33 @@ export default function PracticeGame({ title, objective, fen, onBack }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick, status, pendingPromotion, playerColor, finalizeMove]);
 
+  // Hint: recomputed whenever it's the player's own turn and the toggle is
+  // on. This mode never affects rating/record, so there's nothing to
+  // disqualify by using it.
+  useEffect(() => {
+    if (status !== 'playing' || pendingPromotion || thinking) {
+      setHintMove(null);
+      return;
+    }
+    if (!hintEnabled || game.turn() !== playerColor) {
+      setHintMove(null);
+      return;
+    }
+    const scratch = new Chess(game.fen());
+    const mv = findBestMove(scratch, DIFFICULTY_DEPTH.medium);
+    setHintMove(mv ? { from: mv.from, to: mv.to } : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tick, status, pendingPromotion, thinking, hintEnabled]);
+
+  // Guard/attack overlay for the player's own pieces, shown whenever the
+  // hint toggle is on, regardless of whose turn it currently is.
+  const fenForAnalysis = game.fen();
+  const guardAttackInfo = useMemo(
+    () => (hintEnabled ? computeGuardAttackInfo(game, playerColor) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [fenForAnalysis, hintEnabled]
+  );
+
   // Detect game end.
   useEffect(() => {
     if (status !== 'playing') return;
@@ -125,20 +155,36 @@ export default function PracticeGame({ title, objective, fen, onBack }: Props) {
     <div className="lesson-screen">
       <button className="back-btn" onClick={onBack}>← Back</button>
       <h2>{title}</h2>
-      <p className="lesson-text">{statusText}</p>
+      <div className="practice-header-row">
+        <p className="lesson-text">{statusText}</p>
+        {status === 'playing' && (
+          <button
+            className={`hint-toggle-btn ${hintEnabled ? 'hint-btn-active' : ''}`}
+            onClick={() => setHintEnabled((v) => !v)}
+          >
+            💡 Hint
+          </button>
+        )}
+      </div>
 
       <ChessBoard
         game={game}
         selected={selected}
         legalMoves={legalMoves}
         onSquareTap={handleSquareTap}
+        hintFrom={hintMove?.from}
+        hintTo={hintMove?.to}
+        analysisLines={guardAttackInfo?.lines}
+        analysisTint={guardAttackInfo?.tint}
       />
 
       {pendingPromotion && (
         <PromotionPicker color={pendingPromotion.color} onChoose={handlePromotionChoice} />
       )}
 
-      {status !== 'playing' && <button className="play-btn" onClick={onBack}>Done</button>}
+      <div className="action-slot">
+        {status !== 'playing' && <button className="play-btn" onClick={onBack}>Done</button>}
+      </div>
     </div>
   );
 }

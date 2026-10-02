@@ -1,4 +1,4 @@
-import PieceIcon from '../PieceIcon';
+import Portrait from './Portrait';
 import type { Opponent } from './opponents';
 import { LESSONS, PUZZLES } from './content';
 
@@ -20,9 +20,7 @@ export default function OpponentScreen({ opponent, playerRating, record, onLesso
     <div className="opponent-screen">
       <button className="back-btn" onClick={onBack}>← Back</button>
 
-      <div className="opponent-portrait" style={{ background: opponent.color }}>
-        <PieceIcon type={opponent.pieceTheme} color="w" />
-      </div>
+      <Portrait opponent={opponent} />
 
       <h2 className="opponent-name">{opponent.name}</h2>
       <p className="opponent-meta">Rating: {opponent.rating}</p>
