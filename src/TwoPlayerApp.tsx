@@ -1,10 +1,11 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Chess } from 'chess.js';
 import ChessBoard from './ChessBoard';
 import { ClockDisplay, useClockTicker } from './Clock';
 import CapturedPieces from './CapturedPieces';
 import PromotionPicker from './PromotionPicker';
 import { findBestMove, DIFFICULTY_DEPTH } from './engine';
+import { computeGuardAttackInfo } from './analysis';
 import { saveFen, loadFen, clearFen } from './storage';
 import './TwoPlayerApp.css';
 
@@ -53,9 +54,33 @@ interface CaptureEvent {
   color: 'w' | 'b'; // color of the captured piece
 }
 
+// Before the winner gets to finish, the mated side gets one desperate turn:
+// if their king is adjacent to one of the checking pieces, they may capture
+// it — even though that would normally be illegal (it may leave the king
+// still in check from another piece). If a "covering" piece defends the
+// square the king lands on, the winner then finishes with that specific
+// piece instead of any attacker.
+interface LosingSideCounter {
+  matedColor: 'w' | 'b';
+  kingSquare: string;
+  killableCheckers: string[];
+}
+
+function chebyshevDistance(a: string, b: string): number {
+  const af = a.charCodeAt(0) - 'a'.charCodeAt(0);
+  const ar = a.charCodeAt(1) - '1'.charCodeAt(0);
+  const bf = b.charCodeAt(0) - 'a'.charCodeAt(0);
+  const br = b.charCodeAt(1) - '1'.charCodeAt(0);
+  return Math.max(Math.abs(af - bf), Math.abs(ar - br));
+}
+
 type Phase = 'setup' | 'playing';
 
-export default function TwoPlayerApp() {
+interface Props {
+  onBack?: () => void;
+}
+
+export default function TwoPlayerApp({ onBack }: Props) {
   // A single mutable Chess instance lives for the whole game so its internal
   // move history (needed for the captured-pieces list) is never lost.
   // Re-creating a Chess object from FEN on every move drops that history,
@@ -72,6 +97,7 @@ export default function TwoPlayerApp() {
   const [pendingPromotion, setPendingPromotion] = useState<PendingPromotion | null>(null);
   const [gameOver, setGameOver] = useState<GameOverState | null>(null);
   const [finishingMate, setFinishingMate] = useState<FinishingMate | null>(null);
+  const [losingSideCounter, setLosingSideCounter] = useState<LosingSideCounter | null>(null);
   const [hintMove, setHintMove] = useState<{ from: string; to: string } | null>(null);
   const [hintEnabled, setHintEnabled] = useState<{ w: boolean; b: boolean }>({ w: false, b: false });
   const [thinking, setThinking] = useState(false);
@@ -174,8 +200,17 @@ export default function TwoPlayerApp() {
             .map((m) => m.from)
         : [];
       if (kingSquare && attackerSquares.length > 0) {
-        setFinishingMate({ winnerColor, kingSquare, attackerSquares });
-        // Clock keeps the winner's side active; it's still their move.
+        // Does the mated king stand adjacent to (at least one of) the
+        // checking pieces? If so, the mated side gets a turn to try
+        // capturing it with the king before the winner finishes.
+        const killableCheckers = attackerSquares.filter((sq) => chebyshevDistance(kingSquare!, sq) === 1);
+        if (killableCheckers.length > 0) {
+          setLosingSideCounter({ matedColor, kingSquare, killableCheckers });
+          setActive(matedColor === 'w' ? 'white' : 'black'); // it's the mated side's turn to act
+        } else {
+          setFinishingMate({ winnerColor, kingSquare, attackerSquares });
+          setActive(winnerColor === 'w' ? 'white' : 'black');
+        }
       } else {
         // Fallback safety net, should not normally occur.
         setActive(null);
@@ -216,9 +251,60 @@ export default function TwoPlayerApp() {
     bump();
   }, [finishingMate]);
 
+  // The mated king captures one of the adjacent checking pieces. This is
+  // normally illegal (it can leave the king in check), which is exactly the
+  // point — it's the losing side's one desperate counter-attack. If another
+  // enemy piece still covers the square afterward, the winner finishes with
+  // that specific piece; otherwise the check is genuinely broken and play continues.
+  const handleKingCounterAttack = useCallback((checkerSquare: string) => {
+    if (!losingSideCounter) return;
+    const { matedColor, kingSquare } = losingSideCounter;
+    const winnerColor = matedColor === 'w' ? 'b' : 'w';
+
+    const checkerPiece = gameRef.current!.get(checkerSquare as any);
+    if (checkerPiece) {
+      setCaptureLog((log) => [...log, { square: checkerSquare, type: checkerPiece.type, color: checkerPiece.color }]);
+    }
+
+    const next = new Chess(gameRef.current!.fen());
+    next.remove(kingSquare as any);
+    next.remove(checkerSquare as any);
+    next.put({ type: 'k', color: matedColor }, checkerSquare as any);
+
+    // Check whether any other enemy piece still attacks the king's new square.
+    const checkFenParts = next.fen().split(' ');
+    checkFenParts[1] = winnerColor;
+    const checkScratch = new Chess(checkFenParts.join(' '));
+    const coveringSquares = (checkScratch.moves({ verbose: true }) as any[])
+      .filter((m) => m.to === checkerSquare)
+      .map((m) => m.from);
+
+    setSelected(null);
+    setLegalMoves([]);
+    setLastMove({ from: kingSquare, to: checkerSquare });
+    setLosingSideCounter(null);
+
+    if (coveringSquares.length > 0) {
+      gameRef.current = next;
+      setFinishingMate({ winnerColor, kingSquare: checkerSquare, attackerSquares: coveringSquares });
+      setActive(winnerColor === 'w' ? 'white' : 'black');
+    } else {
+      // A genuine escape: the king broke the check entirely. Play continues normally.
+      const finalFenParts = next.fen().split(' ');
+      finalFenParts[1] = winnerColor;
+      finalFenParts[3] = '-'; // clear any stale en-passant target
+      gameRef.current = new Chess(finalFenParts.join(' '));
+      setActive(winnerColor === 'w' ? 'white' : 'black');
+    }
+    bump();
+  }, [losingSideCounter]);
+
   const handleRemovePiece = useCallback((square: string) => {
     const piece = gameRef.current!.get(square as any);
     if (!piece || piece.type === 'k') return; // kings can't be handicap-removed
+    // Handicap removals show up in the captured-pieces row from the start,
+    // as if that piece had already been taken off the board.
+    setCaptureLog((log) => [...log, { square, type: piece.type, color: piece.color }]);
     gameRef.current!.remove(square as any);
     bump();
   }, []);
@@ -226,6 +312,21 @@ export default function TwoPlayerApp() {
   const handleSquareTap = useCallback((square: string) => {
     if (phase === 'setup') {
       handleRemovePiece(square);
+      return;
+    }
+
+    if (losingSideCounter) {
+      if (selected === losingSideCounter.kingSquare && losingSideCounter.killableCheckers.includes(square)) {
+        handleKingCounterAttack(square);
+        return;
+      }
+      if (square === losingSideCounter.kingSquare) {
+        setSelected(square);
+        setLegalMoves(losingSideCounter.killableCheckers);
+        return;
+      }
+      setSelected(null);
+      setLegalMoves([]);
       return;
     }
 
@@ -276,7 +377,7 @@ export default function TwoPlayerApp() {
       setSelected(square);
       setLegalMoves(moves.map((m) => m.to));
     }
-  }, [game, selected, legalMoves, pendingPromotion, finalizeMove, phase, handleRemovePiece, gameOver, finishingMate, finalizeKingCapture, vsComputer, computerColor, thinking]);
+  }, [game, selected, legalMoves, pendingPromotion, finalizeMove, phase, handleRemovePiece, gameOver, finishingMate, finalizeKingCapture, vsComputer, computerColor, thinking, losingSideCounter, handleKingCounterAttack]);
 
   const handlePromotionChoice = useCallback((piece: 'q' | 'r' | 'b' | 'n') => {
     if (!pendingPromotion) return;
@@ -287,7 +388,7 @@ export default function TwoPlayerApp() {
   // Computer's turn: think for a moment, then play a move via the normal path.
   useEffect(() => {
     if (phase !== 'playing') return;
-    if (gameOver || finishingMate || pendingPromotion) return;
+    if (gameOver || finishingMate || pendingPromotion || losingSideCounter) return;
     if (!vsComputer) return;
     if (gameRef.current!.turn() !== computerColor) return;
 
@@ -303,7 +404,7 @@ export default function TwoPlayerApp() {
       setThinking(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tick, phase, vsComputer, computerColor, difficulty, gameOver, finishingMate, pendingPromotion]);
+  }, [tick, phase, vsComputer, computerColor, difficulty, gameOver, finishingMate, pendingPromotion, losingSideCounter]);
 
   // If the computer delivers checkmate, it finishes the game itself —
   // there's no human at that seat to make the finishing tap.
@@ -315,11 +416,40 @@ export default function TwoPlayerApp() {
     return () => clearTimeout(timer);
   }, [finishingMate, vsComputer, computerColor, finalizeKingCapture]);
 
+  // If the computer is the mated side, it decides its own counter-attack —
+  // there's no human there to tap it. It prefers a checker whose capture
+  // fully breaks the check (no covering piece left); otherwise any choice
+  // leads to the same outcome, so it just picks the first.
+  useEffect(() => {
+    if (!losingSideCounter || !vsComputer || losingSideCounter.matedColor !== computerColor) return;
+    const timer = setTimeout(() => {
+      const { matedColor, kingSquare, killableCheckers } = losingSideCounter;
+      const winnerColor = matedColor === 'w' ? 'b' : 'w';
+      let bestChoice = killableCheckers[0];
+      for (const checkerSquare of killableCheckers) {
+        const next = new Chess(gameRef.current!.fen());
+        next.remove(kingSquare as any);
+        next.remove(checkerSquare as any);
+        next.put({ type: 'k', color: matedColor }, checkerSquare as any);
+        const checkFenParts = next.fen().split(' ');
+        checkFenParts[1] = winnerColor;
+        const checkScratch = new Chess(checkFenParts.join(' '));
+        const stillCovered = (checkScratch.moves({ verbose: true }) as any[]).some((m) => m.to === checkerSquare);
+        if (!stillCovered) {
+          bestChoice = checkerSquare;
+          break;
+        }
+      }
+      handleKingCounterAttack(bestChoice);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [losingSideCounter, vsComputer, computerColor, handleKingCounterAttack]);
+
   // A player's hint preference persists across their turns: once toggled on
   // for a side, it stays on (recomputing the suggestion fresh) every time
   // the turn comes back to them, until they toggle it off again.
   useEffect(() => {
-    if (phase !== 'playing' || gameOver || finishingMate || pendingPromotion || thinking) {
+    if (phase !== 'playing' || gameOver || finishingMate || losingSideCounter || pendingPromotion || thinking) {
       setHintMove(null);
       return;
     }
@@ -332,7 +462,7 @@ export default function TwoPlayerApp() {
     const mv = findBestMove(scratch, DIFFICULTY_DEPTH[difficulty]);
     setHintMove(mv ? { from: mv.from, to: mv.to } : null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tick, phase, gameOver, finishingMate, pendingPromotion, thinking, hintEnabled, vsComputer, computerColor, difficulty]);
+  }, [tick, phase, gameOver, finishingMate, losingSideCounter, pendingPromotion, thinking, hintEnabled, vsComputer, computerColor, difficulty]);
 
   const handleHintToggle = (side: 'w' | 'b') => {
     setHintEnabled((prev) => ({ ...prev, [side]: !prev[side] }));
@@ -346,6 +476,7 @@ export default function TwoPlayerApp() {
     setPendingPromotion(null);
     setGameOver(null);
     setFinishingMate(null);
+    setLosingSideCounter(null);
     setHintMove(null);
     setHintEnabled({ w: false, b: false });
     setThinking(false);
@@ -385,12 +516,35 @@ export default function TwoPlayerApp() {
     capturedBlack.reduce((sum, t) => sum + (PIECE_VALUE[t] ?? 0), 0) -
     capturedWhite.reduce((sum, t) => sum + (PIECE_VALUE[t] ?? 0), 0);
   const blackAdvantage = -whiteAdvantage;
-  const bloodMap = new Map<string, 'w' | 'b'>();
-  for (const c of captureLog) bloodMap.set(c.square, c.color);
+  const bloodMap = new Map<string, Array<'w' | 'b'>>();
+  for (const c of captureLog) {
+    const existing = bloodMap.get(c.square);
+    if (existing) existing.push(c.color);
+    else bloodMap.set(c.square, [c.color]);
+  }
+
+  // Guard/attack overlay: shown for whichever side(s) have their hint
+  // toggle on, regardless of whose turn it is — it's useful at any point,
+  // not just while deciding a move. Memoized so it only recomputes when the
+  // position or toggle state actually changes, not on every clock tick.
+  const fenForAnalysis = game.fen();
+  const guardAttackW = useMemo(
+    () => (hintEnabled.w ? computeGuardAttackInfo(game, 'w') : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [fenForAnalysis, hintEnabled.w]
+  );
+  const guardAttackB = useMemo(
+    () => (hintEnabled.b ? computeGuardAttackInfo(game, 'b') : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [fenForAnalysis, hintEnabled.b]
+  );
+  const analysisLines = [...(guardAttackW?.lines ?? []), ...(guardAttackB?.lines ?? [])];
+  const analysisTint = new Map([...(guardAttackW?.tint ?? []), ...(guardAttackB?.tint ?? [])]);
 
   const status = (() => {
     if (phase === 'setup') return 'Setting up new game';
     if (gameOver) return `${gameOver.winner === 'white' ? 'White' : 'Black'} wins by checkmate`;
+    if (losingSideCounter) return 'Checkmate — your king can strike back. Tap it, then a checking piece.';
     if (finishingMate) return 'Checkmate — capture the king to win';
     if (thinking) return 'Computer is thinking…';
     if (game.isStalemate()) return 'Stalemate';
@@ -401,6 +555,8 @@ export default function TwoPlayerApp() {
 
   const activeSide: 'w' | 'b' | null = gameOver
     ? null
+    : losingSideCounter
+    ? losingSideCounter.matedColor
     : finishingMate
     ? finishingMate.winnerColor
     : phase === 'playing'
@@ -408,11 +564,12 @@ export default function TwoPlayerApp() {
     : null;
 
   const baseHintBlocked =
-    phase !== 'playing' || !!gameOver || !!finishingMate || !!pendingPromotion || thinking;
+    phase !== 'playing' || !!gameOver || !!finishingMate || !!losingSideCounter || !!pendingPromotion || thinking;
 
   return (
     <div className="app">
       <div className="top-bar">
+        {onBack && <button className="menu-back-btn" onClick={onBack}>← Menu</button>}
         <span className="turn-indicator">{status}</span>
         {phase === 'playing' && <button onClick={handleOpenSetup}>New game</button>}
       </div>
@@ -441,6 +598,8 @@ export default function TwoPlayerApp() {
         hintFrom={hintMove?.from}
         hintTo={hintMove?.to}
         bloodMap={bloodMap}
+        analysisLines={analysisLines}
+        analysisTint={analysisTint}
         lastMove={lastMove}
       />
 

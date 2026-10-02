@@ -39,7 +39,7 @@ export default function App() {
   // Where "Back" from the practice screen should return to.
   const [practiceOrigin, setPracticeOrigin] = useState<'opening-library' | 'endgame-library'>('opening-library');
 
-  if (view === 'two-player') return <TwoPlayerApp />;
+  if (view === 'two-player') return <TwoPlayerApp onBack={() => setView('home')} />;
 
   if (view === 'opening-library') {
     return (

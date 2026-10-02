@@ -12,15 +12,18 @@ interface Props {
   onSquareTap: (square: string) => void;
   hintFrom?: string | null;
   hintTo?: string | null;
-  bloodMap?: Map<string, 'w' | 'b'>;
+  bloodMap?: Map<string, Array<'w' | 'b'>>;
   lastMove?: { from: string; to: string } | null;
+  analysisLines?: Array<{ from: string; to: string; kind: 'defend' | 'attack' }>;
+  analysisTint?: Map<string, 'blue' | 'red'>;
 }
 
-// Deterministic pseudo-random index (0-3) per square, so the same square
-// always gets the same spatter pattern rather than reshuffling on re-render.
-function patternIndex(square: string): number {
+// Deterministic pseudo-random index (0-3) per square (and capture layer), so
+// repeated captures on the same square get visibly different patterns
+// instead of stacking identically on top of each other.
+function patternIndex(key: string): number {
   let hash = 0;
-  for (let i = 0; i < square.length; i++) hash = (hash * 31 + square.charCodeAt(i)) | 0;
+  for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) | 0;
   return Math.abs(hash) % 4;
 }
 
@@ -30,8 +33,22 @@ function fileIndex(square: string): number {
 function rankIndex(square: string): number {
   return RANKS.indexOf(square[1]);
 }
+function squareCenterPercent(square: string): { x: number; y: number } {
+  return { x: (fileIndex(square) + 0.5) * 12.5, y: (rankIndex(square) + 0.5) * 12.5 };
+}
 
-export default function ChessBoard({ game, selected, legalMoves, onSquareTap, hintFrom, hintTo, bloodMap, lastMove }: Props) {
+export default function ChessBoard({
+  game,
+  selected,
+  legalMoves,
+  onSquareTap,
+  hintFrom,
+  hintTo,
+  bloodMap,
+  lastMove,
+  analysisLines,
+  analysisTint,
+}: Props) {
   // `game` is a single mutated-in-place Chess instance (see App.tsx), so its
   // object reference never changes between moves. Depending on `game` alone
   // means this memo would never recompute after the first render. Depending
@@ -93,7 +110,8 @@ export default function ChessBoard({ game, selected, legalMoves, onSquareTap, hi
           const isCapture = isLegal && !!piece;
           const isHint = hintFrom === square || hintTo === square;
           const isLastMove = lastMove?.from === square || lastMove?.to === square;
-          const bloodColor = bloodMap?.get(square);
+          const bloodEvents = bloodMap?.get(square) ?? [];
+          const tint = analysisTint?.get(square);
 
           const classes = [
             'square',
@@ -104,11 +122,17 @@ export default function ChessBoard({ game, selected, legalMoves, onSquareTap, hi
             isCheck ? 'check' : '',
             isHint ? 'hint' : '',
             isLastMove ? 'last-move' : '',
-            bloodColor ? `blood blood-${bloodColor} blood-p${patternIndex(square)}` : '',
+            tint ? `tint-${tint}` : '',
           ].filter(Boolean).join(' ');
 
           return (
             <div key={square} data-square={square} className={classes} onClick={() => onSquareTap(square)}>
+              {bloodEvents.map((color, i) => (
+                <span
+                  key={i}
+                  className={`blood-layer blood-${color} blood-p${patternIndex(square + i)}`}
+                />
+              ))}
               {piece && (
                 <span className={`piece ${piece.color}`}>
                   <PieceIcon type={piece.type as any} color={piece.color as 'w' | 'b'} />
@@ -118,6 +142,25 @@ export default function ChessBoard({ game, selected, legalMoves, onSquareTap, hi
             </div>
           );
         })
+      )}
+
+      {analysisLines && analysisLines.length > 0 && (
+        <svg className="analysis-overlay" viewBox="0 0 100 100" preserveAspectRatio="none">
+          {analysisLines.map((line, i) => {
+            const from = squareCenterPercent(line.from);
+            const to = squareCenterPercent(line.to);
+            return (
+              <line
+                key={i}
+                x1={from.x}
+                y1={from.y}
+                x2={to.x}
+                y2={to.y}
+                className={`analysis-line analysis-line-${line.kind}`}
+              />
+            );
+          })}
+        </svg>
       )}
     </div>
   );
