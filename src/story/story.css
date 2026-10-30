@@ -2,20 +2,30 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   height: 100vh;
   width: 100vw;
   background: #1a1a1a;
   color: #eee;
   font-family: system-ui, sans-serif;
-  gap: 1rem;
-  overflow: hidden;
-  touch-action: none;
+  gap: 0.7rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+  touch-action: pan-y;
+  padding: 0.8rem 0;
+  box-sizing: border-box;
+}
+
+/* Spacers centre the tiles when they fit, and let the menu scroll when they don't. */
+.home-screen::before,
+.home-screen::after {
+  content: '';
+  flex: 1 0 0;
 }
 
 .home-title {
   font-size: 2rem;
-  margin-bottom: 1rem;
+  margin: 0 0 0.4rem;
 }
 
 .home-tile {
@@ -24,7 +34,8 @@
   align-items: flex-start;
   gap: 0.3rem;
   width: min(80vw, 360px);
-  padding: 1rem 1.2rem;
+  flex-shrink: 0;
+  padding: 0.8rem 1.2rem;
   border-radius: 14px;
   border: none;
   background: #2a2a2a;
