@@ -32,7 +32,9 @@ const packCell = (from: number, to: number) => [from & 63, to & 63, (from >> 6) 
 const unpackCell = (p: number[]) => ({ from: p[0] | ((p[2] & 1) << 6), to: p[1] | (((p[2] >> 1) & 1) << 6) });
 
 const FULL = { x: -6.9, y: -7.8, w: 13.8, h: 15.6 };
-const ZOOMS = [1, 1.6, 2.3];
+// Two views: the full star, or a narrower portrait crop with two columns trimmed left and right.
+const PORTRAIT = { x: -4.5, y: -7.8, w: 9, h: 15.6 };
+const PORTRAIT_MAX_PX = 4; // holes further out than this are hidden in the portrait view
 const other = (p: Player): Player => (p === 1 ? 2 : 1);
 
 export default function CheckersApp({ mode, remote, cpuPlayer = 2, level = 'medium', onBack }: Props) {
@@ -125,7 +127,7 @@ export default function CheckersApp({ mode, remote, cpuPlayer = 2, level = 'medi
   const actor: Player | null = winner ? null : mode === 'local' ? turn : turn === me ? me : null;
 
   const tap = (idx: number) => {
-    if (actor === null || dragMoved.current) return;
+    if (actor === null) return;
     const marble = marbleAt(marbles, idx);
     if (marble && marble.owner === actor) {
       if (selected === marble.id) {
@@ -152,85 +154,9 @@ export default function CheckersApp({ mode, remote, cpuPlayer = 2, level = 'medi
     setWinner({ player: other(actor ?? me), reason: 'resignation' });
   };
 
-  // ---- zoom & pan ----
-  const [zoomIdx, setZoomIdx] = useState(1);
-  const zoom = ZOOMS[zoomIdx];
-  const [focus, setFocus] = useState<{ x: number; y: number }>(() => {
-    // Start around the middle of the board, leaning toward the viewer's own corner.
-    return { x: 0, y: 2.2 };
-  });
-  const clampView = (cx: number, cy: number, z: number) => {
-    const w = FULL.w / z, h = FULL.h / z;
-    return {
-      x: Math.min(Math.max(cx - w / 2, FULL.x), FULL.x + FULL.w - w),
-      y: Math.min(Math.max(cy - h / 2, FULL.y), FULL.y + FULL.h - h),
-      w,
-      h,
-    };
-  };
-  const [view, setView] = useState(FULL);
-  const viewRef = useRef(view);
-  viewRef.current = view;
-  const targetView = clampView(focus.x, focus.y, zoom);
-
-  // Animate the view toward its target.
-  useEffect(() => {
-    let raf = 0;
-    const step = () => {
-      const v = viewRef.current;
-      const t = targetView;
-      const k = 0.25;
-      const nx = v.x + (t.x - v.x) * k, ny = v.y + (t.y - v.y) * k, nw = v.w + (t.w - v.w) * k, nh = v.h + (t.h - v.h) * k;
-      const done = Math.abs(t.x - nx) + Math.abs(t.y - ny) + Math.abs(t.w - nw) < 0.01;
-      const next = done ? t : { x: nx, y: ny, w: nw, h: nh };
-      viewRef.current = next;
-      setView(next);
-      if (!done) raf = requestAnimationFrame(step);
-    };
-    raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetView.x, targetView.y, targetView.w, targetView.h]);
-
-  // Keep the view on the player who is about to act: centre on the box around
-  // their marbles that haven't reached the goal yet (re-evaluated after every move).
-  const focusPlayer: Player = mode === 'local' ? turn : me;
-  useEffect(() => {
-    let pts = marbles.filter((m) => m.owner === focusPlayer && !inTarget(focusPlayer, CELLS[m.idx]));
-    if (pts.length === 0) pts = marbles.filter((m) => m.owner === focusPlayer);
-    if (pts.length === 0) return;
-    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-    for (const m of pts) {
-      const { px, py } = project(CELLS[m.idx], me);
-      x0 = Math.min(x0, px); x1 = Math.max(x1, px);
-      y0 = Math.min(y0, py); y1 = Math.max(y1, py);
-    }
-    setFocus({ x: (x0 + x1) / 2, y: (y0 + y1) / 2 });
-  }, [marbles, focusPlayer, me]);
-
-  const svgRef = useRef<SVGSVGElement>(null);
-  const drag = useRef<{ x: number; y: number; fx: number; fy: number } | null>(null);
-  const dragMoved = useRef(false);
-  const onPointerDown = (e: React.PointerEvent) => {
-    if (zoom === 1) return;
-    drag.current = { x: e.clientX, y: e.clientY, fx: focus.x, fy: focus.y };
-    dragMoved.current = false;
-  };
-  const onPointerMove = (e: React.PointerEvent) => {
-    const d = drag.current;
-    if (!d || !svgRef.current) return;
-    const dx = e.clientX - d.x, dy = e.clientY - d.y;
-    if (!dragMoved.current && Math.hypot(dx, dy) < 8) return;
-    dragMoved.current = true;
-    const unitsPerPx = viewRef.current.w / svgRef.current.getBoundingClientRect().width;
-    const c = clampView(d.fx - dx * unitsPerPx, d.fy - dy * unitsPerPx, zoom);
-    setFocus({ x: c.x + c.w / 2, y: c.y + c.h / 2 });
-  };
-  const onPointerUp = () => {
-    drag.current = null;
-    // A drag shouldn't count as a tap on whatever it ended over.
-    setTimeout(() => (dragMoved.current = false), 60);
-  };
+  // ---- view: full (default) or portrait crop ----
+  const [portrait, setPortrait] = useState(false);
+  const view = portrait ? PORTRAIT : FULL;
 
   const status = winner
     ? mode === 'local'
@@ -258,14 +184,15 @@ export default function CheckersApp({ mode, remote, cpuPlayer = 2, level = 'medi
     );
 
   const vb = `${view.x} ${view.y} ${view.w} ${view.h}`;
+  const aspect = view.w / view.h;
 
   return (
     <div className="checkers-screen">
       <div className="checkers-bar">
         <button className="back-btn" onClick={onBack}>← Back</button>
         <span className={`checkers-status ${actor !== null && mode !== 'local' ? 'mine' : ''}`}>{status}</span>
-        <button onClick={() => setZoomIdx((i) => (i + 1) % ZOOMS.length)} title="Zoom level">
-          🔍 {zoom === 1 ? 'Full' : `${zoom}×`}
+        <button onClick={() => setPortrait((v) => !v)} title="Switch between the full board and a narrower, taller view">
+          🔍 {portrait ? 'Narrow' : 'Full'}
         </button>
         {linkState === 'failed' && (
           <button onClick={() => failedSend.current && enqueueSend(failedSend.current.type, failedSend.current.payload)}>Resend</button>
@@ -275,16 +202,13 @@ export default function CheckersApp({ mode, remote, cpuPlayer = 2, level = 'medi
       </div>
 
       <svg
-        ref={svgRef}
         className="checkers-board"
         viewBox={vb}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
+        style={{ aspectRatio: `${view.w} / ${view.h}`, width: `min(96vw, calc((100vh - 6rem) * ${aspect}))` }}
       >
         {CELLS.map((c) => {
           const { px, py } = project(c, me);
+          if (portrait && Math.abs(px) > PORTRAIT_MAX_PX) return null;
           const isDest = dests.includes(c.idx);
           const homeOf: Player | null = inHome(1, c) ? 1 : inHome(2, c) ? 2 : null;
           const targetOfMe = inTarget(me, c);

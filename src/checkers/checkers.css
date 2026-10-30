@@ -33,7 +33,6 @@
 .checkers-status { font-weight: 600; font-size: 0.95rem; }
 .checkers-status.mine { color: #4fa8ff; }
 .checkers-board {
-  width: min(96vw, calc((100vh - 6rem) * 13.8 / 15.6));
   height: auto;
   background: #26343b;
   border-radius: 14px;

@@ -1,4 +1,4 @@
-Version: 31.0 — 2026-10-30
+Version: 31.1 — 2026-10-30
 
 # React + TypeScript + Vite
 
