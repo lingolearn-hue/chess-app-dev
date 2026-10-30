@@ -6,35 +6,26 @@ import type { Player } from './logic';
 import '../link/link.css';
 
 interface Props {
+  start: 'cpu' | 'local' | 'remote';
   onBack: () => void;
 }
 
-type Stage = 'menu' | 'cpu-setup' | 'cpu' | 'local' | 'remote';
+type Stage = 'cpu-setup' | 'cpu' | 'local' | 'remote';
 
-export default function CheckersHome({ onBack }: Props) {
-  const [stage, setStage] = useState<Stage>('menu');
+export default function CheckersHome({ start, onBack }: Props) {
+  const [stage, setStage] = useState<Stage>(start === 'cpu' ? 'cpu-setup' : start);
   const [level, setLevel] = useState<CheckersLevel>('medium');
   const [side, setSide] = useState<'1' | '2' | 'random'>('1');
   const [cpuPlayer, setCpuPlayer] = useState<Player>(2);
 
-  if (stage === 'remote') return <TwoDeviceApp kind="checkers" onBack={() => setStage('menu')} />;
-  if (stage === 'local') return <CheckersApp mode="local" onBack={() => setStage('menu')} />;
-  if (stage === 'cpu') return <CheckersApp mode="cpu" cpuPlayer={cpuPlayer} level={level} onBack={() => setStage('menu')} />;
+  if (stage === 'remote') return <TwoDeviceApp kind="checkers" onBack={onBack} />;
+  if (stage === 'local') return <CheckersApp mode="local" onBack={onBack} />;
+  if (stage === 'cpu') return <CheckersApp mode="cpu" cpuPlayer={cpuPlayer} level={level} onBack={onBack} />;
 
   return (
     <div className="link-screen">
-      <button className="back-btn" onClick={stage === 'menu' ? onBack : () => setStage('menu')}>← Back</button>
-      <h1 className="home-title">Chinese Checkers</h1>
-
-      {stage === 'menu' && (
-        <>
-          <div className="link-row" style={{ flexDirection: 'column', alignItems: 'stretch', width: 'min(80vw, 320px)' }}>
-            <button className="link-btn primary" onClick={() => setStage('cpu-setup')}>Vs Computer</button>
-            <button className="link-btn primary" onClick={() => setStage('local')}>Two players, one device</button>
-            <button className="link-btn primary" onClick={() => setStage('remote')}>Two devices (sound)</button>
-          </div>
-        </>
-      )}
+      <button className="back-btn" onClick={onBack}>← Back</button>
+      <h1 className="home-title">Vs Computer</h1>
 
       {stage === 'cpu-setup' && (
         <>

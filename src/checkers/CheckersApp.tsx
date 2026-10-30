@@ -192,12 +192,21 @@ export default function CheckersApp({ mode, remote, cpuPlayer = 2, level = 'medi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetView.x, targetView.y, targetView.w, targetView.h]);
 
-  // Follow the action: centre on each new move.
+  // Keep the view on the player who is about to act: centre on the box around
+  // their marbles that haven't reached the goal yet (re-evaluated after every move).
+  const focusPlayer: Player = mode === 'local' ? turn : me;
   useEffect(() => {
-    if (!lastMove) return;
-    const a = project(CELLS[lastMove.from], me), b = project(CELLS[lastMove.to], me);
-    setFocus({ x: (a.px + b.px) / 2, y: (a.py + b.py) / 2 });
-  }, [lastMove, me]);
+    let pts = marbles.filter((m) => m.owner === focusPlayer && !inTarget(focusPlayer, CELLS[m.idx]));
+    if (pts.length === 0) pts = marbles.filter((m) => m.owner === focusPlayer);
+    if (pts.length === 0) return;
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (const m of pts) {
+      const { px, py } = project(CELLS[m.idx], me);
+      x0 = Math.min(x0, px); x1 = Math.max(x1, px);
+      y0 = Math.min(y0, py); y1 = Math.max(y1, py);
+    }
+    setFocus({ x: (x0 + x1) / 2, y: (y0 + y1) / 2 });
+  }, [marbles, focusPlayer, me]);
 
   const svgRef = useRef<SVGSVGElement>(null);
   const drag = useRef<{ x: number; y: number; fx: number; fy: number } | null>(null);
@@ -253,7 +262,7 @@ export default function CheckersApp({ mode, remote, cpuPlayer = 2, level = 'medi
   return (
     <div className="checkers-screen">
       <div className="checkers-bar">
-        <button onClick={onBack}>← Menu</button>
+        <button className="back-btn" onClick={onBack}>← Back</button>
         <span className={`checkers-status ${actor !== null && mode !== 'local' ? 'mine' : ''}`}>{status}</span>
         <button onClick={() => setZoomIdx((i) => (i + 1) % ZOOMS.length)} title="Zoom level">
           🔍 {zoom === 1 ? 'Full' : `${zoom}×`}

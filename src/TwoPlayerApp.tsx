@@ -718,7 +718,7 @@ export default function TwoPlayerApp({ onBack, remote }: Props) {
   return (
     <div className="app">
       <div className="top-bar">
-        {onBack && <button className="menu-back-btn" onClick={onBack}>← Menu</button>}
+        {onBack && <button className="back-btn" onClick={onBack}>← Back</button>}
         <span className="turn-indicator">{status}</span>
         {!remote && phase === 'playing' && <button onClick={handleOpenSetup}>New game</button>}
         {remote && linkState === 'failed' && (
