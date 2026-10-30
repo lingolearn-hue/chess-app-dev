@@ -42,6 +42,10 @@ export default function StoryGame({ opponent, onDone, onBack }: Props) {
   const [ratingDelta, setRatingDelta] = useState(0);
   const [playerRating, setPlayerRating] = useState(() => loadPlayerRating());
   const [ratingCounted, setRatingCounted] = useState(true);
+  // Leaving mid-game or using Undo counts the game as a loss (once). After
+  // that, the game no longer changes rating or record.
+  const [lossRecorded, setLossRecorded] = useState(false);
+  const [confirm, setConfirm] = useState<null | 'leave' | 'undo'>(null);
 
   // Using a hint at any point this game disqualifies it from affecting
   // rating or the win/loss record — tracked for the whole game, not just
@@ -59,6 +63,43 @@ export default function StoryGame({ opponent, onDone, onBack }: Props) {
       if (transientTimerRef.current) clearTimeout(transientTimerRef.current);
     };
   }, []);
+
+  // Applies a loss to rating and record right away (leave / undo). Skipped
+  // when hints were used (those games never affect rating) or already recorded.
+  const recordLoss = () => {
+    if (hintUsed || lossRecorded) return;
+    const expected = expectedScore(playerRating, opponent.rating);
+    const newRating = updateRating(playerRating, expected, 0);
+    setRatingDelta(newRating - playerRating);
+    setPlayerRating(newRating);
+    savePlayerRating(newRating);
+    const record = loadOpponentRecord(opponent.id);
+    record.losses += 1;
+    saveOpponentRecord(opponent.id, record);
+    setLossRecorded(true);
+  };
+
+  const requestLeave = () => {
+    if (phase === 'playing' && !result) setConfirm('leave');
+    else onBack();
+  };
+
+  const handleUndoClick = () => {
+    if (lossRecorded || hintUsed) doUndo();
+    else setConfirm('undo');
+  };
+
+  const doUndo = () => {
+    // Take back the computer's reply and the player's move before it.
+    const g = gameRef.current!;
+    if (g.turn() !== 'w' || g.history().length < 2) return;
+    g.undo();
+    g.undo();
+    setSelected(null);
+    setLegalMoves([]);
+    setHintMove(null);
+    bump();
+  };
 
   const finalizeMove = useCallback((from: string, to: string, promotion?: 'q' | 'r' | 'b' | 'n') => {
     let moveResult: any;
@@ -185,10 +226,10 @@ export default function StoryGame({ opponent, onDone, onBack }: Props) {
     }
     setResult(r);
 
-    if (hintUsed) {
-      // Hints were used this game: no rating or record change, just XP for playing.
+    if (hintUsed || lossRecorded) {
+      // Hints were used (or the game was already counted as a loss by Undo): no further rating or record change.
       setRatingCounted(false);
-      setRatingDelta(0);
+      if (!lossRecorded) setRatingDelta(0);
     } else {
       const actual = r === 'win' ? 1 : r === 'draw' ? 0.5 : 0;
       const expected = expectedScore(playerRating, opponent.rating);
@@ -221,7 +262,7 @@ export default function StoryGame({ opponent, onDone, onBack }: Props) {
 
   return (
     <div className="story-game-screen">
-      <button className="back-btn" onClick={onBack}>← Back</button>
+      <button className="back-btn" onClick={requestLeave}>← Back</button>
 
       {/* Always-present header: the board never shifts when dialogue or
           status text changes, since this row has a fixed reserved height. */}
@@ -237,6 +278,16 @@ export default function StoryGame({ opponent, onDone, onBack }: Props) {
           <span className="story-game-opponent-name">{opponent.name}</span>
           <span className="lesson-text">{headerText}</span>
         </div>
+        {phase === 'playing' && (
+          <button
+            className="hint-toggle-btn"
+            onClick={handleUndoClick}
+            disabled={thinking || game.turn() !== 'w' || game.history().length < 2}
+            title="Take back your last move"
+          >
+            ↶ Undo
+          </button>
+        )}
         {phase === 'playing' && (
           <button
             className={`hint-toggle-btn ${hintEnabled ? 'hint-btn-active' : ''}`}
@@ -275,6 +326,34 @@ export default function StoryGame({ opponent, onDone, onBack }: Props) {
         </div>
       )}
 
+      {confirm && (
+        <div className="dialogue-overlay">
+          <div className="dialogue-panel">
+            <p className="rating-change">
+              {confirm === 'leave' ? 'Leaving now ' : 'Using Undo '}
+              {hintUsed
+                ? 'ends this game (hints were used, so rating and record stay unchanged).'
+                : lossRecorded
+                ? 'is free — this game is already counted as a loss.'
+                : 'counts this game as a loss for your rating and record.'}
+            </p>
+            <button
+              className="play-btn"
+              onClick={() => {
+                const c = confirm;
+                setConfirm(null);
+                recordLoss();
+                if (c === 'undo') doUndo();
+                else onBack();
+              }}
+            >
+              {confirm === 'leave' ? 'Leave game' : 'Undo move'}
+            </button>
+            <button className="play-btn" onClick={() => setConfirm(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
+
       {phase === 'post-dialogue' && (
         <div className="dialogue-overlay">
           <div className="dialogue-panel">
@@ -282,6 +361,8 @@ export default function StoryGame({ opponent, onDone, onBack }: Props) {
               {result === 'win' ? 'You won!' : result === 'loss' ? 'You lost.' : 'Draw.'}{' '}
               {ratingCounted
                 ? `Rating: ${playerRating - ratingDelta} → ${playerRating} (${ratingDelta >= 0 ? '+' : ''}${ratingDelta})`
+                : lossRecorded
+                ? 'Undo was used — this game was counted as a loss.'
                 : 'Hints were used — no rating or record change this game.'}
             </p>
             <button className="play-btn" onClick={onDone}>Continue</button>

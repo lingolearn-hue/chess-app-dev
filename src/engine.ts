@@ -137,25 +137,45 @@ export interface EngineMove {
 // Finds the best move for the side to move in `game`, searching `depth` plies.
 // Operates on the passed instance directly (with move/undo), so callers
 // should pass a disposable clone, not the app's live game object.
-export function findBestMove(game: Chess, depth: number): EngineMove | null {
+// Approximate ply number from the FEN (scratch clones carry no history).
+function plyFromFen(game: Chess): number {
+  const parts = game.fen().split(' ');
+  const fullmove = parseInt(parts[5] ?? '1', 10) || 1;
+  return (fullmove - 1) * 2 + (parts[1] === 'b' ? 1 : 0);
+}
+
+// `variety` (centipawns): among root moves scoring within this margin of the
+// best, one is picked at random, so games don't open identically every time.
+// Default 0 = fully deterministic best move (used for hints). Never applied
+// when a forced mate is on the board.
+export function findBestMove(game: Chess, depth: number, variety = 0): EngineMove | null {
   const moves = orderMoves(game.moves({ verbose: true }) as any[]);
   if (moves.length === 0) return null;
 
   const maximizing = game.turn() === 'w';
-  let bestMove: any = null;
+  const scored: Array<{ m: any; score: number }> = [];
   let bestScore = maximizing ? -Infinity : Infinity;
 
   for (const m of moves) {
     game.move({ from: m.from, to: m.to, promotion: m.promotion });
     const score = minimax(game, depth - 1, -Infinity, Infinity, !maximizing);
     game.undo();
-    if (maximizing ? score > bestScore : score < bestScore) {
-      bestScore = score;
-      bestMove = m;
-    }
+    scored.push({ m, score });
+    if (maximizing ? score > bestScore : score < bestScore) bestScore = score;
   }
 
+  let pool = scored.filter((x) => x.score === bestScore);
+  if (variety > 0 && Math.abs(bestScore) < MATE_SCORE / 2) {
+    pool = scored.filter((x) => Math.abs(x.score - bestScore) <= variety);
+  }
+  const bestMove = pool[Math.floor(Math.random() * pool.length)]?.m;
+
   return bestMove ? { from: bestMove.from, to: bestMove.to, promotion: bestMove.promotion } : null;
+}
+
+/** Opening moves vary more than later ones. Use for computer opponents only. */
+export function computerVariety(game: Chess): number {
+  return plyFromFen(game) < 10 ? 6 : 3;
 }
 
 export const DIFFICULTY_DEPTH: Record<'easy' | 'medium' | 'hard', number> = {
@@ -182,5 +202,5 @@ export function findMoveForStrength(game: Chess, strength: EngineStrength): Engi
     return { from: m.from, to: m.to, promotion: m.promotion };
   }
 
-  return findBestMove(game, strength.depth);
+  return findBestMove(game, strength.depth, computerVariety(game));
 }

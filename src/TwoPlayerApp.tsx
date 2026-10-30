@@ -4,7 +4,7 @@ import ChessBoard from './ChessBoard';
 import { ClockDisplay, useClockTicker } from './Clock';
 import CapturedPieces from './CapturedPieces';
 import PromotionPicker from './PromotionPicker';
-import { findBestMove, DIFFICULTY_DEPTH } from './engine';
+import { findBestMove, computerVariety, DIFFICULTY_DEPTH } from './engine';
 import { computeGuardAttackInfo } from './analysis';
 import { saveFen, loadFen, clearFen } from './storage';
 import type { SoundLink } from './link/audio';
@@ -500,7 +500,7 @@ export default function TwoPlayerApp({ onBack, remote }: Props) {
     setThinking(true);
     const timer = setTimeout(() => {
       const scratch = new Chess(gameRef.current!.fen());
-      const mv = findBestMove(scratch, DIFFICULTY_DEPTH[difficulty]);
+      const mv = findBestMove(scratch, DIFFICULTY_DEPTH[difficulty], computerVariety(scratch));
       setThinking(false);
       if (mv) finalizeMove(mv.from, mv.to, mv.promotion);
     }, 400);

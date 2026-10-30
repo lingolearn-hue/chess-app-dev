@@ -4,7 +4,7 @@ import ChessBoard from '../ChessBoard';
 import PromotionPicker from '../PromotionPicker';
 import CapturedPieces from '../CapturedPieces';
 import { capturedFromHistory } from '../captured';
-import { findBestMove, DIFFICULTY_DEPTH } from '../engine';
+import { findBestMove, computerVariety, DIFFICULTY_DEPTH } from '../engine';
 import { computeGuardAttackInfo } from '../analysis';
 
 interface Props {
@@ -95,7 +95,7 @@ export default function PracticeGame({ title, objective, fen, onBack }: Props) {
     setThinking(true);
     const timer = setTimeout(() => {
       const scratch = new Chess(gameRef.current!.fen());
-      const mv = findBestMove(scratch, DIFFICULTY_DEPTH.medium);
+      const mv = findBestMove(scratch, DIFFICULTY_DEPTH.medium, computerVariety(scratch));
       setThinking(false);
       if (mv) finalizeMove(mv.from, mv.to, mv.promotion);
     }, 400);
