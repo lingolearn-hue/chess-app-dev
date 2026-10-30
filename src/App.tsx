@@ -9,6 +9,7 @@ import StoryGame from './story/StoryGame';
 import OpeningLibrary from './story/OpeningLibrary';
 import EndgameLibrary from './story/EndgameLibrary';
 import PracticeGame from './story/PracticeGame';
+import SoundLinkTest from './link/SoundLinkTest';
 import { getOpponent } from './story/opponents';
 import { LESSONS, PUZZLES } from './story/content';
 import { loadPlayerRating, loadOpponentRecord } from './story/storyStorage';
@@ -24,7 +25,8 @@ type View =
   | 'story-game'
   | 'opening-library'
   | 'endgame-library'
-  | 'practice-game';
+  | 'practice-game'
+  | 'sound-link';
 
 interface PracticeParams {
   fen: string;
@@ -39,6 +41,7 @@ export default function App() {
   // Where "Back" from the practice screen should return to.
   const [practiceOrigin, setPracticeOrigin] = useState<'opening-library' | 'endgame-library'>('opening-library');
 
+  if (view === 'sound-link') return <SoundLinkTest onBack={() => setView('home')} />;
   if (view === 'two-player') return <TwoPlayerApp onBack={() => setView('home')} />;
 
   if (view === 'opening-library') {
@@ -142,6 +145,7 @@ export default function App() {
       onSelectStory={() => setView('story-home')}
       onSelectOpenings={() => setView('opening-library')}
       onSelectEndgames={() => setView('endgame-library')}
+      onSelectSoundLink={() => setView('sound-link')}
     />
   );
 }

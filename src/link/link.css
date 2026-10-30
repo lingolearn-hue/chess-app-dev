@@ -1,0 +1,32 @@
+.link-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100vh;
+  width: 100vw;
+  background: #1a1a1a;
+  color: #eee;
+  font-family: system-ui, sans-serif;
+  overflow-y: auto;
+  padding: 3.5rem 1rem 1rem;
+  box-sizing: border-box;
+  gap: 0.6rem;
+}
+.link-note, .link-sub { font-size: 0.85rem; opacity: 0.8; text-align: center; max-width: 30rem; margin: 0; }
+.link-syms { word-break: break-all; font-family: monospace; font-size: 0.75rem; }
+.link-error { color: #f66; font-size: 0.85rem; }
+.link-row { display: flex; gap: 0.6rem; flex-wrap: wrap; justify-content: center; }
+.link-btn {
+  padding: 0.7rem 1.1rem; border-radius: 10px; border: none; background: #333; color: #eee;
+  font-size: 0.95rem; cursor: pointer;
+}
+.link-btn.primary { background: #3d7a4a; }
+.link-btn.small { padding: 0.4rem 0.8rem; font-size: 0.8rem; }
+.link-btn:disabled { opacity: 0.5; }
+.link-check { font-size: 0.85rem; opacity: 0.85; }
+.link-meter { width: min(80vw, 360px); height: 14px; background: #333; border-radius: 7px; overflow: hidden; }
+.link-meter-fill { height: 100%; background: linear-gradient(90deg, #3d7a4a, #d6b13a, #c0392b); transition: width 0.05s linear; }
+.link-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; width: min(80vw, 360px); }
+.link-stats div { background: #2a2a2a; border-radius: 8px; padding: 0.4rem; display: flex; flex-direction: column; align-items: center; }
+.link-stats b { font-size: 1.2rem; }
+.link-stats span { font-size: 0.7rem; opacity: 0.7; }
