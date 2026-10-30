@@ -1,14 +1,15 @@
 // Sound Link codec: 6-bit symbols, each sent as a 3-tone chord (one tone per band).
 // Pure logic, no audio APIs, so it can be unit-tested in node.
 
-// 3 bands x 4 tones. Chosen so no tone is within 50 Hz of a 2nd/3rd harmonic of another.
+// 3 bands x 4 tones, all in the 1.1-3.8 kHz range where phone speakers and mics
+// respond best. No tone is within 50 Hz of a 2nd/3rd harmonic of another.
 export const BANDS: number[][] = [
-  [530, 680, 830, 980],
-  [1140, 1420, 1710, 1890],
-  [2420, 2690, 3070, 3350],
+  [1150, 1430, 1670, 1860],
+  [2220, 2400, 2620, 2800],
+  [3100, 3280, 3580, 3770],
 ];
 
-export const TONE_MS = 90;
+export const TONE_MS = 120;
 export const GAP_MS = 60;
 
 export const PRE1 = 21; // 010101

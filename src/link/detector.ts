@@ -1,12 +1,16 @@
-import { BANDS } from './codec';
+import { BANDS, TONE_MS, GAP_MS } from './codec';
 
 // Turns a stream of magnitude spectra (dB, e.g. AnalyserNode.getFloatFrequencyData)
-// into 6-bit symbols. Needs no clock sync: a symbol is a run of >= MIN_RUN reads
-// with the same stable chord; silence or a different chord ends the run.
+// into 6-bit symbols. Needs no clock sync. Robustness measures:
+//  - tolerates a single glitchy read inside a tone,
+//  - a chord that persists across the gap (room reverb) is counted as repeated
+//    symbols based on how long it lasted, so "same chord twice" is not lost.
 
-const MIN_MARGIN_DB = 8; // best tone vs second-best tone in the same band
-const MIN_ABOVE_FLOOR_DB = 12; // best tone vs band median
-const MIN_RUN = 3;
+const MIN_MARGIN_DB = 6; // best tone vs second-best tone in the same band
+const MIN_ABOVE_FLOOR_DB = 10; // best tone vs band median
+const MIN_RUN = 3; // reads
+const PERIOD_MS = TONE_MS + GAP_MS;
+const MAX_REPEAT = 3;
 
 export interface BandReading {
   idx: number;
@@ -15,11 +19,23 @@ export interface BandReading {
 }
 
 export class SymbolDetector {
-  private run = -1;
-  private count = 0;
   private sampleRate: number;
   private fftSize: number;
   private onSymbol: (s: number) => void;
+
+  // current run
+  private cand = -1;
+  private count = 0;
+  private firstT = 0;
+  private lastT = 0;
+  private miss = 0;
+  // challenger chord seen while a run is open
+  private pend = -1;
+  private pendCount = 0;
+  private pendFirstT = 0;
+  private lastReadT = 0;
+  private hopMs = 15;
+
   constructor(sampleRate: number, fftSize: number, onSymbol: (s: number) => void) {
     this.sampleRate = sampleRate;
     this.fftSize = fftSize;
@@ -50,23 +66,75 @@ export class SymbolDetector {
     return { idx: best, ok, peakDb: vals[best] };
   }
 
-  /** Feed one spectrum. Returns the current mean peak level (dB) for a level meter. */
-  push(spec: Float32Array): number {
+  private flush() {
+    if (this.cand >= 0 && this.count >= MIN_RUN) {
+      const dur = this.lastT - this.firstT + this.hopMs;
+      const copies = Math.max(1, Math.min(MAX_REPEAT, Math.round((dur + GAP_MS) / PERIOD_MS)));
+      for (let i = 0; i < copies; i++) this.onSymbol(this.cand);
+    }
+    this.cand = -1;
+    this.count = 0;
+    this.miss = 0;
+  }
+
+  /** Feed one spectrum taken at time `nowMs`. Returns the mean peak level (dB) for a level meter. */
+  push(spec: Float32Array, nowMs: number = performance.now()): number {
+    if (this.lastReadT > 0) this.hopMs = Math.min(40, Math.max(5, nowMs - this.lastReadT));
+    this.lastReadT = nowMs;
+
     const r = [this.readBand(spec, 0), this.readBand(spec, 1), this.readBand(spec, 2)];
     const active = r.every((x) => x.ok);
     const sym = active ? r[0].idx | (r[1].idx << 2) | (r[2].idx << 4) : -1;
-    if (sym === this.run) {
-      if (sym >= 0) this.count++;
+
+    if (this.cand < 0) {
+      if (sym >= 0) {
+        this.cand = sym;
+        this.count = 1;
+        this.firstT = this.lastT = nowMs;
+        this.miss = 0;
+        this.pend = -1;
+      }
+    } else if (sym === this.cand) {
+      this.count++;
+      this.lastT = nowMs;
+      this.miss = 0;
+      this.pend = -1;
+      this.pendCount = 0;
+    } else if (sym < 0) {
+      // silence / unclear read: one glitch is tolerated, two end the run
+      this.miss++;
+      this.pend = -1;
+      this.pendCount = 0;
+      if (this.miss >= 2) this.flush();
     } else {
-      if (this.run >= 0 && this.count >= MIN_RUN) this.onSymbol(this.run);
-      this.run = sym;
-      this.count = sym >= 0 ? 1 : 0;
+      // a different chord: needs two consecutive reads to replace the current run
+      if (sym === this.pend) {
+        this.pendCount++;
+      } else {
+        this.pend = sym;
+        this.pendCount = 1;
+        this.pendFirstT = nowMs;
+      }
+      if (this.pendCount >= 2) {
+        this.flush();
+        this.cand = sym;
+        this.count = this.pendCount;
+        this.firstT = this.pendFirstT;
+        this.lastT = nowMs;
+        this.miss = 0;
+        this.pend = -1;
+        this.pendCount = 0;
+      }
     }
     return (r[0].peakDb + r[1].peakDb + r[2].peakDb) / 3;
   }
 
   reset() {
-    this.run = -1;
+    this.cand = -1;
     this.count = 0;
+    this.miss = 0;
+    this.pend = -1;
+    this.pendCount = 0;
+    this.lastReadT = 0;
   }
 }

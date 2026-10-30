@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { SoundLink } from './audio';
+import type { LinkStats } from './audio';
 import { packTest, unpackTest } from './codec';
 import './link.css';
 
@@ -31,6 +32,7 @@ export default function SoundLinkTest({ onBack }: Props) {
   const [lastTx, setLastTx] = useState('–');
   const [symbols, setSymbols] = useState<number[]>([]);
   const [report, setReport] = useState('');
+  const [heard, setHeard] = useState<LinkStats>({ symbols: 0, preambles: 0, frames: 0 });
 
   useEffect(() => {
     return () => linkRef.current?.close();
@@ -50,6 +52,7 @@ export default function SoundLinkTest({ onBack }: Props) {
       link.ev = {
         onLevel: (db) => setLevel(db),
         onTx: setTx,
+        onStats: setHeard,
         onSymbol: (s) => setSymbols((a) => [...a.slice(-15), s]),
         onFrame: (f) => {
           if (f.type === 'test') {
@@ -145,8 +148,9 @@ export default function SoundLinkTest({ onBack }: Props) {
             <div><b>{rate === null ? '–' : `${rate}%`}</b><span>success</span></div>
           </div>
           <p className="link-sub">Last sent: <code>{lastTx}</code> · Last received: <code>{lastRx}</code></p>
+          <p className="link-sub">Heard: {heard.symbols} chords · {heard.preambles} frame starts · {heard.frames} valid. Many starts but few valid = noisy or too quiet.</p>
           <p className="link-sub link-syms">Raw symbols: {symbols.length ? symbols.join(' ') : '–'}</p>
-          <button className="link-btn small" onClick={() => { setStats(ZERO); setReport(''); }}>Reset counters</button>
+          <button className="link-btn small" onClick={() => { setStats(ZERO); setReport(''); if (linkRef.current) linkRef.current.stats = { symbols: 0, preambles: 0, frames: 0 }; setHeard({ symbols: 0, preambles: 0, frames: 0 }); }}>Reset counters</button>
         </>
       )}
     </div>

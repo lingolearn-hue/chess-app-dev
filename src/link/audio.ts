@@ -1,9 +1,9 @@
-import { encodeFrame, tryParse, symbolToTones, TONE_MS, GAP_MS } from './codec';
+import { encodeFrame, tryParse, symbolToTones, TONE_MS, GAP_MS, PRE1, PRE2 } from './codec';
 import type { Frame, FrameType } from './codec';
 import { SymbolDetector } from './detector';
 
 const FFT = 2048;
-const ACK_WAIT_MS = 1800;
+const ACK_WAIT_MS = 2300;
 const MAX_ATTEMPTS = 5;
 
 export interface LinkEvents {
@@ -11,6 +11,13 @@ export interface LinkEvents {
   onLevel?: (db: number) => void;
   onSymbol?: (s: number) => void;
   onTx?: (sending: boolean) => void;
+  onStats?: (s: LinkStats) => void;
+}
+
+export interface LinkStats {
+  symbols: number; // chords heard
+  preambles: number; // frame starts heard
+  frames: number; // frames that passed the checksum
 }
 
 // Debug transport: opening the app with ?bus makes two tabs of the same browser
@@ -31,6 +38,7 @@ export class SoundLink {
   private seq = 0;
   private lastRxSeq = -1;
   private pendingAck: { seq: number; resolve: () => void } | null = null;
+  stats: LinkStats = { symbols: 0, preambles: 0, frames: 0 };
   /** When true the device hears its own transmissions (loopback test). */
   selfHear = false;
   /** Auto-acknowledge received data frames. */
@@ -108,10 +116,18 @@ export class SoundLink {
     if (now - this.lastSymbolAt > 1000) this.buf.length = 0;
     this.lastSymbolAt = now;
     this.ev.onSymbol?.(s);
+    this.stats.symbols++;
     this.buf.push(s);
     if (this.buf.length > 16) this.buf.shift();
+    const n = this.buf.length;
+    if (n >= 2 && this.buf[n - 2] === PRE1 && this.buf[n - 1] === PRE2) this.stats.preambles++;
     const f = tryParse(this.buf);
-    if (!f) return;
+    if (!f) {
+      this.ev.onStats?.({ ...this.stats });
+      return;
+    }
+    this.stats.frames++;
+    this.ev.onStats?.({ ...this.stats });
     this.buf.length = 0;
     this.handleFrame(f);
   }
@@ -158,7 +174,7 @@ export class SoundLink {
     const per = (TONE_MS + GAP_MS) / 1000;
     const t0 = ctx.currentTime + 0.05;
     const master = ctx.createGain();
-    master.gain.value = 0.9;
+    master.gain.value = 1.0;
     master.connect(ctx.destination);
     symbols.forEach((s, i) => {
       const start = t0 + i * per;
@@ -168,8 +184,8 @@ export class SoundLink {
         const g = ctx.createGain();
         osc.frequency.value = freq;
         g.gain.setValueAtTime(0, start);
-        g.gain.linearRampToValueAtTime(0.3, start + 0.005);
-        g.gain.setValueAtTime(0.3, end - 0.005);
+        g.gain.linearRampToValueAtTime(0.32, start + 0.005);
+        g.gain.setValueAtTime(0.32, end - 0.005);
         g.gain.linearRampToValueAtTime(0, end);
         osc.connect(g).connect(master);
         osc.start(start);

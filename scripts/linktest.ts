@@ -35,12 +35,13 @@ function decode(pcm: Float64Array, sr: number): Frame[] {
   const det = new SymbolDetector(sr, N, (s) => { buf.push(s); const f = tryParse(buf); if (f) { out.push(f); buf.length = 0; } });
   const win = new Float64Array(N).map((_, i) => 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (N - 1)));
   const spec = new Float32Array(N / 2);
-  for (let p = 0; p + N <= pcm.length; p += hop) {
+  let idx = 0;
+  for (let p = 0; p + N <= pcm.length; p += hop, idx++) {
     const re = new Float64Array(N), im = new Float64Array(N);
     for (let i = 0; i < N; i++) re[i] = pcm[p + i] * win[i];
     fft(re, im);
     for (let b = 0; b < N / 2; b++) spec[b] = 20 * Math.log10(Math.hypot(re[b], im[b]) / N + 1e-12);
-    det.push(spec);
+    det.push(spec, (idx * hop / sr) * 1000);
   }
   return out;
 }
