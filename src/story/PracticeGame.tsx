@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Chess } from 'chess.js';
 import ChessBoard from '../ChessBoard';
 import PromotionPicker from '../PromotionPicker';
+import CapturedPieces from '../CapturedPieces';
+import { capturedFromHistory } from '../captured';
 import { findBestMove, DIFFICULTY_DEPTH } from '../engine';
 import { computeGuardAttackInfo } from '../analysis';
 
@@ -144,6 +146,8 @@ export default function PracticeGame({ title, objective, fen, onBack }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick, status]);
 
+  const cap = capturedFromHistory(game);
+
   const statusText = (() => {
     if (status === 'success') return 'Objective achieved!';
     if (status === 'failed') return 'The position was lost — try again from the library.';
@@ -167,6 +171,13 @@ export default function PracticeGame({ title, objective, fen, onBack }: Props) {
         )}
       </div>
 
+      <CapturedPieces
+        color={playerColor === 'w' ? 'w' : 'b'}
+        pieces={playerColor === 'w' ? cap.byBlack : cap.byWhite}
+        advantage={playerColor === 'w' ? -cap.whiteAdvantage : cap.whiteAdvantage}
+        compact
+      />
+
       <ChessBoard
         game={game}
         selected={selected}
@@ -176,6 +187,13 @@ export default function PracticeGame({ title, objective, fen, onBack }: Props) {
         hintTo={hintMove?.to}
         analysisLines={guardAttackInfo?.lines}
         analysisTint={guardAttackInfo?.tint}
+      />
+
+      <CapturedPieces
+        color={playerColor === 'w' ? 'b' : 'w'}
+        pieces={playerColor === 'w' ? cap.byWhite : cap.byBlack}
+        advantage={playerColor === 'w' ? cap.whiteAdvantage : -cap.whiteAdvantage}
+        compact
       />
 
       {pendingPromotion && (

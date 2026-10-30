@@ -218,6 +218,10 @@
   transform: rotate(180deg);
 }
 
+.board.upright .piece.b {
+  transform: none;
+}
+
 .time-controls {
   display: flex;
   gap: 0.3rem;
@@ -422,4 +426,17 @@
   color: #111;
   font-weight: 600;
   cursor: pointer;
+}
+
+/* Compact trophy rows used in story / library modes */
+.captured-row.compact {
+  min-height: 1.6rem;
+}
+.captured-row.compact .captured-piece {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+.link-banner {
+  font-size: 0.8rem;
+  color: #f5c518;
 }

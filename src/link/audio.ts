@@ -13,7 +13,12 @@ export interface LinkEvents {
   onTx?: (sending: boolean) => void;
 }
 
+// Debug transport: opening the app with ?bus makes two tabs of the same browser
+// talk over a BroadcastChannel instead of sound (for testing without audio).
+const BUS = typeof location !== 'undefined' && /[?&]bus\b/.test(location.search);
+
 export class SoundLink {
+  private bus: BroadcastChannel | null = null;
   ctx: AudioContext | null = null;
   private stream: MediaStream | null = null;
   private analyser: AnalyserNode | null = null;
@@ -34,11 +39,16 @@ export class SoundLink {
 
   /** Must be called from a user gesture (iOS). */
   async start(): Promise<void> {
+    if (BUS) return;
     if (!this.ctx) {
       const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       this.ctx = new AC();
     }
     if (this.ctx.state !== 'running') await this.ctx.resume();
+  }
+
+  get isBus() {
+    return BUS;
   }
 
   get listening() {
@@ -47,6 +57,17 @@ export class SoundLink {
 
   async listen(): Promise<void> {
     await this.start();
+    if (BUS) {
+      if (this.bus) return;
+      this.bus = new BroadcastChannel('chess-sound-link');
+      this.bus.onmessage = (e: MessageEvent<number[]>) => {
+        if (this.sending) return;
+        this.buf.length = 0;
+        for (const sym of e.data) this.handleSymbol(sym);
+      };
+      this.ev.onLevel?.(-40);
+      return;
+    }
     if (this.stream || !this.ctx) return;
     this.stream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
@@ -103,13 +124,34 @@ export class SoundLink {
     const dup = f.seq === this.lastRxSeq;
     this.lastRxSeq = f.seq;
     if (this.autoAck) {
-      window.setTimeout(() => void this.play({ type: 'ack', seq: f.seq, payload: [] }), 250);
+      window.setTimeout(() => void this.play({ type: 'ack', seq: f.seq, payload: [] }), 350);
     }
     if (!dup) this.ev.onFrame?.(f);
   }
 
-  /** Play one frame (no retry). Resolves when playback has finished. */
+  private txChain: Promise<void> = Promise.resolve();
+
+  /** Play one frame (no retry), queued after any playback in progress. */
   play(f: Frame): Promise<void> {
+    const p = this.txChain.then(() => this.playNow(f));
+    this.txChain = p.catch(() => undefined);
+    return p;
+  }
+
+  private playNow(f: Frame): Promise<void> {
+    if (BUS) {
+      const syms = encodeFrame(f);
+      this.bus?.postMessage(syms);
+      this.sending = true;
+      this.ev.onTx?.(true);
+      return new Promise((resolve) =>
+        window.setTimeout(() => {
+          this.sending = false;
+          this.ev.onTx?.(false);
+          resolve();
+        }, syms.length * 30)
+      );
+    }
     const ctx = this.ctx;
     if (!ctx) return Promise.reject(new Error('audio not started'));
     const symbols = encodeFrame(f);
@@ -171,6 +213,8 @@ export class SoundLink {
   }
 
   close() {
+    this.bus?.close();
+    this.bus = null;
     this.stopListening();
     void this.ctx?.close();
     this.ctx = null;

@@ -18,7 +18,7 @@ export type FrameType = 'test' | 'move' | 'ack' | 'hello' | 'resign' | 'drawOffe
 export const TYPES: FrameType[] = ['test', 'move', 'ack', 'hello', 'resign', 'drawOffer', 'drawAccept', 'drawDecline'];
 // number of payload symbols per type
 export const PAYLOAD_LEN: Record<FrameType, number> = {
-  test: 2, move: 3, ack: 0, hello: 2, resign: 0, drawOffer: 0, drawAccept: 0, drawDecline: 0,
+  test: 2, move: 5, ack: 0, hello: 2, resign: 0, drawOffer: 0, drawAccept: 0, drawDecline: 0,
 };
 
 export interface Frame {
@@ -80,12 +80,14 @@ export function unpackTest(p: number[]): number {
 }
 
 const PROMO = [undefined, 'q', 'r', 'b', 'n'] as const;
-export function packMove(from: number, to: number, promotion?: string): number[] {
+// Move payload: from (6 bits), to (6 bits), promotion (0-4), mover's remaining clock seconds (12 bits).
+export function packMove(from: number, to: number, promotion?: string, secs = 0): number[] {
   const pi = Math.max(0, PROMO.indexOf(promotion as never));
-  return [from & 63, to & 63, pi];
+  const t = Math.max(0, Math.min(4095, Math.round(secs)));
+  return [from & 63, to & 63, pi, (t >> 6) & 63, t & 63];
 }
-export function unpackMove(p: number[]): { from: number; to: number; promotion?: string } {
-  return { from: p[0], to: p[1], promotion: PROMO[p[2]] ?? undefined };
+export function unpackMove(p: number[]): { from: number; to: number; promotion?: string; secs: number } {
+  return { from: p[0], to: p[1], promotion: PROMO[p[2]] ?? undefined, secs: (p[3] << 6) | p[4] };
 }
 export const squareToIndex = (sq: string) => (sq.charCodeAt(0) - 97) + 8 * (sq.charCodeAt(1) - 49);
 export const indexToSquare = (i: number) => String.fromCharCode(97 + (i % 8)) + String.fromCharCode(49 + Math.floor(i / 8));

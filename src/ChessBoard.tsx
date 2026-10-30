@@ -16,6 +16,10 @@ interface Props {
   lastMove?: { from: string; to: string } | null;
   analysisLines?: Array<{ from: string; to: string; kind: 'defend' | 'attack' }>;
   analysisTint?: Map<string, 'blue' | 'red'>;
+  /** Which side sits at the bottom. Default White. */
+  orientation?: 'w' | 'b';
+  /** Draw all pieces upright (used when each player has their own device). */
+  upright?: boolean;
 }
 
 // Deterministic pseudo-random index (0-3) per square (and capture layer), so
@@ -27,14 +31,17 @@ function patternIndex(key: string): number {
   return Math.abs(hash) % 4;
 }
 
-function fileIndex(square: string): number {
-  return FILES.indexOf(square[0]);
+// Display column/row of a square for the given orientation.
+function fileIndex(square: string, o: 'w' | 'b' = 'w'): number {
+  const f = FILES.indexOf(square[0]);
+  return o === 'w' ? f : 7 - f;
 }
-function rankIndex(square: string): number {
-  return RANKS.indexOf(square[1]);
+function rankIndex(square: string, o: 'w' | 'b' = 'w'): number {
+  const r = RANKS.indexOf(square[1]);
+  return o === 'w' ? r : 7 - r;
 }
-function squareCenterPercent(square: string): { x: number; y: number } {
-  return { x: (fileIndex(square) + 0.5) * 12.5, y: (rankIndex(square) + 0.5) * 12.5 };
+function squareCenterPercent(square: string, o: 'w' | 'b'): { x: number; y: number } {
+  return { x: (fileIndex(square, o) + 0.5) * 12.5, y: (rankIndex(square, o) + 0.5) * 12.5 };
 }
 
 export default function ChessBoard({
@@ -48,6 +55,8 @@ export default function ChessBoard({
   lastMove,
   analysisLines,
   analysisTint,
+  orientation = 'w',
+  upright = false,
 }: Props) {
   // `game` is a single mutated-in-place Chess instance (see App.tsx), so its
   // object reference never changes between moves. Depending on `game` alone
@@ -82,9 +91,9 @@ export default function ChessBoard({
     if (!el) return;
 
     const cell = boardRef.current.clientWidth / 8;
-    const dx = (fileIndex(lastMove.from) - fileIndex(lastMove.to)) * cell;
-    const dy = (rankIndex(lastMove.from) - rankIndex(lastMove.to)) * cell;
-    const isBlack = el.classList.contains('b');
+    const dx = (fileIndex(lastMove.from, orientation) - fileIndex(lastMove.to, orientation)) * cell;
+    const dy = (rankIndex(lastMove.from, orientation) - rankIndex(lastMove.to, orientation)) * cell;
+    const isBlack = el.classList.contains('b') && !upright;
     const restingRotate = isBlack ? 'rotate(180deg)' : '';
 
     el.style.transition = 'none';
@@ -95,12 +104,14 @@ export default function ChessBoard({
     el.offsetHeight;
     el.style.transition = 'transform 180ms ease-out';
     el.style.transform = `translate(0, 0) ${restingRotate}`;
-  }, [lastMove, fen]);
+  }, [lastMove, fen, orientation, upright]);
 
   return (
-    <div className="board" ref={boardRef}>
-      {RANKS.map((rank, rIdx) =>
-        FILES.map((file, fIdx) => {
+    <div className={`board ${upright ? 'upright' : ''}`} ref={boardRef}>
+      {(orientation === 'w' ? [0, 1, 2, 3, 4, 5, 6, 7] : [7, 6, 5, 4, 3, 2, 1, 0]).map((rIdx) =>
+        (orientation === 'w' ? [0, 1, 2, 3, 4, 5, 6, 7] : [7, 6, 5, 4, 3, 2, 1, 0]).map((fIdx) => {
+          const rank = RANKS[rIdx];
+          const file = FILES[fIdx];
           const square = `${file}${rank}` as ChessSquare;
           const piece = board[rIdx][fIdx];
           const isLight = (rIdx + fIdx) % 2 === 0;
@@ -147,8 +158,8 @@ export default function ChessBoard({
       {analysisLines && analysisLines.length > 0 && (
         <svg className="analysis-overlay" viewBox="0 0 100 100" preserveAspectRatio="none">
           {analysisLines.map((line, i) => {
-            const from = squareCenterPercent(line.from);
-            const to = squareCenterPercent(line.to);
+            const from = squareCenterPercent(line.from, orientation);
+            const to = squareCenterPercent(line.to, orientation);
             return (
               <line
                 key={i}

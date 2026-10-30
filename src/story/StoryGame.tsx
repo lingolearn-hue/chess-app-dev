@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Chess } from 'chess.js';
 import ChessBoard from '../ChessBoard';
 import PromotionPicker from '../PromotionPicker';
+import CapturedPieces from '../CapturedPieces';
+import { capturedFromHistory } from '../captured';
 import Portrait from './Portrait';
 import { findMoveForStrength, findBestMove, DIFFICULTY_DEPTH } from '../engine';
 import { computeGuardAttackInfo } from '../analysis';
@@ -208,6 +210,8 @@ export default function StoryGame({ opponent, onDone, onBack }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick, phase]);
 
+  const cap = capturedFromHistory(game);
+
   const headerText = (() => {
     if (phase === 'pre-dialogue') return `"${preLine}"`;
     if (phase === 'post-dialogue') return `"${postLine}"`;
@@ -244,6 +248,8 @@ export default function StoryGame({ opponent, onDone, onBack }: Props) {
         )}
       </div>
 
+      <CapturedPieces color="w" pieces={cap.byBlack} advantage={-cap.whiteAdvantage} compact />
+
       <ChessBoard
         game={game}
         selected={selected}
@@ -254,6 +260,8 @@ export default function StoryGame({ opponent, onDone, onBack }: Props) {
         analysisLines={guardAttackInfo?.lines}
         analysisTint={guardAttackInfo?.tint}
       />
+
+      <CapturedPieces color="b" pieces={cap.byWhite} advantage={cap.whiteAdvantage} compact />
 
       {pendingPromotion && (
         <PromotionPicker color={pendingPromotion.color} onChoose={handlePromotionChoice} />

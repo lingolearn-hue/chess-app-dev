@@ -49,18 +49,18 @@ function decode(pcm: Float64Array, sr: number): Frame[] {
 let fails = 0; const chk = (c: boolean, m: string) => { if (!c) { fails++; console.log('FAIL', m); } };
 for (let s = 0; s < 64; s++) { const t = symbolToTones(s); chk(BANDS[0].includes(t[0]) && BANDS[1].includes(t[1]) && BANDS[2].includes(t[2]), 'tones ' + s); }
 chk(indexToSquare(squareToIndex('e4')) === 'e4' && squareToIndex('a1') === 0 && squareToIndex('h8') === 63, 'sq idx');
-const mv = unpackMove(packMove(squareToIndex('e7'), squareToIndex('e8'), 'q')); chk(mv.promotion === 'q' && indexToSquare(mv.to) === 'e8', 'move pack');
+const mv = unpackMove(packMove(squareToIndex('e7'), squareToIndex('e8'), 'q', 537)); chk(mv.promotion === 'q' && indexToSquare(mv.to) === 'e8' && mv.secs === 537, 'move pack');
 // all-type roundtrip clean
 for (const type of TYPES) { const f: Frame = { type, seq: 5, payload: Array.from({ length: PAYLOAD_LEN[type] }, () => Math.floor(Math.random() * 64)) }; const g = tryParse(encodeFrame(f)); chk(!!g && g.type === type && g.seq === 5 && g.payload.join() === f.payload.join(), 'rt ' + type); }
 // CRC single-symbol corruption detection
-let undetected = 0; for (let i = 0; i < 2000; i++) { const f: Frame = { type: 'move', seq: i & 7, payload: [Math.floor(Math.random()*64), Math.floor(Math.random()*64), Math.floor(Math.random()*5)] }; const e = encodeFrame(f); const k = 2 + Math.floor(Math.random() * (e.length - 2)); e[k] = (e[k] + 1 + Math.floor(Math.random() * 63)) & 63; const g = tryParse(e); if (g && (g.payload.join() !== f.payload.join())) undetected++; }
+let undetected = 0; for (let i = 0; i < 2000; i++) { const f: Frame = { type: 'move', seq: i & 7, payload: packMove(Math.floor(Math.random()*64), Math.floor(Math.random()*64), 'q', Math.floor(Math.random()*900)) }; const e = encodeFrame(f); const k = 2 + Math.floor(Math.random() * (e.length - 2)); e[k] = (e[k] + 1 + Math.floor(Math.random() * 63)) & 63; const g = tryParse(e); if (g && (g.payload.join() !== f.payload.join())) undetected++; }
 console.log('undetected corruptions (of 2000):', undetected);
 
 // 2. acoustic-like trials
 function trial(name: string, sr: number, noise: number, gain: number, distort: boolean, n = 60) {
   let ok = 0;
   for (let i = 0; i < n; i++) {
-    const f: Frame = { type: 'move', seq: i & 7, payload: [Math.floor(Math.random() * 64), Math.floor(Math.random() * 64), Math.floor(Math.random() * 5)] };
+    const f: Frame = { type: 'move', seq: i & 7, payload: [Math.floor(Math.random() * 64), Math.floor(Math.random() * 64), Math.floor(Math.random() * 5), Math.floor(Math.random() * 64), Math.floor(Math.random() * 64)] };
     const pcm = synth(encodeFrame(f), sr, 0.2 + Math.random() * 0.1, 0.3, noise, gain, distort);
     const got = decode(pcm, sr);
     if (got.length === 1 && got[0].payload.join() === f.payload.join()) ok++;

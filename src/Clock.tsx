@@ -17,6 +17,7 @@ interface ClockProps {
   onHintToggle: () => void;
   hintActive: boolean;
   hintDisabled: boolean;
+  hidePause?: boolean;
 }
 
 export function ClockDisplay({
@@ -29,6 +30,7 @@ export function ClockDisplay({
   onHintToggle,
   hintActive,
   hintDisabled,
+  hidePause,
 }: ClockProps) {
   const low = seconds <= 30;
   return (
@@ -42,9 +44,11 @@ export function ClockDisplay({
       >
         💡
       </button>
-      <button className="pause-btn" onClick={onPauseToggle} aria-label={paused ? 'Resume' : 'Pause'}>
-        {paused ? '▶' : '⏸'}
-      </button>
+      {!hidePause && (
+        <button className="pause-btn" onClick={onPauseToggle} aria-label={paused ? 'Resume' : 'Pause'}>
+          {paused ? '▶' : '⏸'}
+        </button>
+      )}
     </div>
   );
 }

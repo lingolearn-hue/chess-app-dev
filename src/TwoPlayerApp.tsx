@@ -7,6 +7,8 @@ import PromotionPicker from './PromotionPicker';
 import { findBestMove, DIFFICULTY_DEPTH } from './engine';
 import { computeGuardAttackInfo } from './analysis';
 import { saveFen, loadFen, clearFen } from './storage';
+import type { SoundLink } from './link/audio';
+import { packMove, unpackMove, squareToIndex, indexToSquare } from './link/codec';
 import './TwoPlayerApp.css';
 
 const PIECE_VALUE: Record<string, number> = { p: 1, n: 3, b: 3, r: 5, q: 9 };
@@ -15,8 +17,8 @@ const DEFAULT_MINUTES = 10;
 
 type Difficulty = 'easy' | 'medium' | 'hard';
 
-function createGame(): Chess {
-  const saved = loadFen();
+function createGame(remote: boolean): Chess {
+  const saved = remote ? null : loadFen();
   const game = new Chess();
   if (saved) {
     try {
@@ -76,17 +78,27 @@ function chebyshevDistance(a: string, b: string): number {
 
 type Phase = 'setup' | 'playing';
 
-interface Props {
-  onBack?: () => void;
+// Two-devices mode: each phone shows its own side at the bottom and
+// exchanges actions over the sound link. All actions (including the
+// house-rule mate sequence) go through the same functions as local taps.
+export interface RemoteConfig {
+  link: SoundLink;
+  myColor: 'w' | 'b';
+  minutes: number;
 }
 
-export default function TwoPlayerApp({ onBack }: Props) {
+interface Props {
+  onBack?: () => void;
+  remote?: RemoteConfig;
+}
+
+export default function TwoPlayerApp({ onBack, remote }: Props) {
   // A single mutable Chess instance lives for the whole game so its internal
   // move history (needed for the captured-pieces list) is never lost.
   // Re-creating a Chess object from FEN on every move drops that history,
   // since FEN encodes only the current position, not how it was reached.
   const gameRef = useRef<Chess | null>(null);
-  if (!gameRef.current) gameRef.current = createGame();
+  if (!gameRef.current) gameRef.current = createGame(!!remote);
   const [tick, setTick] = useState(0);
   const bump = () => setTick((t) => t + 1);
   const game = gameRef.current;
@@ -108,23 +120,25 @@ export default function TwoPlayerApp({ onBack }: Props) {
 
   // New games start in 'setup' phase: time control, opponent type, and the
   // handicap piece-removal function can only be adjusted here, before play begins.
+  const startMinutes = remote ? remote.minutes : DEFAULT_MINUTES;
   const [phase, setPhase] = useState<Phase>('playing');
-  const [setupMinutes, setSetupMinutes] = useState<number>(DEFAULT_MINUTES);
+  const [setupMinutes, setSetupMinutes] = useState<number>(startMinutes);
   const [setupVsComputer, setSetupVsComputer] = useState(false);
   const [setupComputerColor, setSetupComputerColor] = useState<'w' | 'b'>('b');
   const [setupDifficulty, setSetupDifficulty] = useState<Difficulty>('medium');
 
-  const [minutes, setMinutes] = useState<number>(DEFAULT_MINUTES);
+  const [minutes, setMinutes] = useState<number>(startMinutes);
   const [vsComputer, setVsComputer] = useState(false);
   const [computerColor, setComputerColor] = useState<'w' | 'b'>('b');
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
 
-  const [whiteSeconds, setWhiteSeconds] = useState(DEFAULT_MINUTES * 60);
-  const [blackSeconds, setBlackSeconds] = useState(DEFAULT_MINUTES * 60);
+  const [whiteSeconds, setWhiteSeconds] = useState(startMinutes * 60);
+  const [blackSeconds, setBlackSeconds] = useState(startMinutes * 60);
   const [active, setActive] = useState<'white' | 'black' | null>(null);
   const [paused, setPaused] = useState(false);
 
   useEffect(() => {
+    if (remote) return;
     saveFen(game.fen());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick]);
@@ -158,6 +172,36 @@ export default function TwoPlayerApp({ onBack }: Props) {
     onTick: handleTick,
     onFlagFall: handleFlagFall,
   });
+
+  // ---- Two-devices plumbing ----
+  const [linkState, setLinkState] = useState<'ok' | 'sending' | 'failed'>('ok');
+  const [drawOffered, setDrawOffered] = useState(false); // incoming offer from the opponent
+  const [drawPending, setDrawPending] = useState(false); // our own offer awaiting an answer
+  const sendChain = useRef<Promise<void>>(Promise.resolve());
+  const failedSend = useRef<{ type: Parameters<SoundLink['sendReliable']>[0]; payload: number[] } | null>(null);
+  const secondsRef = useRef({ w: whiteSeconds, b: blackSeconds });
+  secondsRef.current = { w: whiteSeconds, b: blackSeconds };
+
+  const enqueueSend = useCallback((type: Parameters<SoundLink['sendReliable']>[0], payload: number[]) => {
+    if (!remote) return;
+    sendChain.current = sendChain.current.then(async () => {
+      setLinkState('sending');
+      const attempts = await remote.link.sendReliable(type, payload);
+      if (attempts > 0) {
+        failedSend.current = null;
+        setLinkState('ok');
+      } else {
+        failedSend.current = { type, payload };
+        setLinkState('failed');
+      }
+    });
+  }, [remote]);
+
+  const sendMove = useCallback((from: string, to: string, promotion?: string) => {
+    if (!remote) return;
+    // Clock value after this move; the opponent adopts it for our side.
+    enqueueSend('move', packMove(squareToIndex(from), squareToIndex(to), promotion, secondsRef.current[remote.myColor]));
+  }, [remote, enqueueSend]);
 
   const finalizeMove = useCallback((from: string, to: string, promotion?: 'q' | 'r' | 'b' | 'n') => {
     let moveResult: any;
@@ -316,7 +360,9 @@ export default function TwoPlayerApp({ onBack }: Props) {
     }
 
     if (losingSideCounter) {
+      if (remote && losingSideCounter.matedColor !== remote.myColor) return;
       if (selected === losingSideCounter.kingSquare && losingSideCounter.killableCheckers.includes(square)) {
+        sendMove(selected, square);
         handleKingCounterAttack(square);
         return;
       }
@@ -331,7 +377,9 @@ export default function TwoPlayerApp({ onBack }: Props) {
     }
 
     if (finishingMate) {
+      if (remote && finishingMate.winnerColor !== remote.myColor) return;
       if (selected && square === finishingMate.kingSquare) {
+        sendMove(selected, square);
         finalizeKingCapture(selected, square);
         return;
       }
@@ -347,6 +395,7 @@ export default function TwoPlayerApp({ onBack }: Props) {
 
     if (gameOver || pendingPromotion || thinking) return;
     if (vsComputer && game.turn() === computerColor) return; // wait for the computer's move
+    if (remote && game.turn() !== remote.myColor) return; // opponent's turn
 
     if (selected) {
       if (legalMoves.includes(square)) {
@@ -356,6 +405,7 @@ export default function TwoPlayerApp({ onBack }: Props) {
           setPendingPromotion({ from: selected, to: square, color: game.turn() });
           return;
         }
+        sendMove(selected, square);
         finalizeMove(selected, square);
         return;
       }
@@ -377,13 +427,68 @@ export default function TwoPlayerApp({ onBack }: Props) {
       setSelected(square);
       setLegalMoves(moves.map((m) => m.to));
     }
-  }, [game, selected, legalMoves, pendingPromotion, finalizeMove, phase, handleRemovePiece, gameOver, finishingMate, finalizeKingCapture, vsComputer, computerColor, thinking, losingSideCounter, handleKingCounterAttack]);
+  }, [game, selected, legalMoves, pendingPromotion, finalizeMove, sendMove, remote, phase, handleRemovePiece, gameOver, finishingMate, finalizeKingCapture, vsComputer, computerColor, thinking, losingSideCounter, handleKingCounterAttack]);
 
   const handlePromotionChoice = useCallback((piece: 'q' | 'r' | 'b' | 'n') => {
     if (!pendingPromotion) return;
+    sendMove(pendingPromotion.from, pendingPromotion.to, piece);
     finalizeMove(pendingPromotion.from, pendingPromotion.to, piece);
     setPendingPromotion(null);
-  }, [pendingPromotion, finalizeMove]);
+  }, [pendingPromotion, finalizeMove, sendMove]);
+
+  // ---- Incoming frames from the opponent ----
+  const [inbox, setInbox] = useState<Array<{ from: string; to: string; promotion?: string; secs: number }>>([]);
+  useEffect(() => {
+    if (!remote) return;
+    const prev = remote.link.ev;
+    remote.link.ev = {
+      ...prev,
+      onFrame: (f) => {
+        if (f.type === 'move') {
+          const m = unpackMove(f.payload);
+          setInbox((q) => [...q, { from: indexToSquare(m.from), to: indexToSquare(m.to), promotion: m.promotion, secs: m.secs }]);
+        } else if (f.type === 'resign') {
+          setActive(null);
+          setGameOver({ winner: remote.myColor === 'w' ? 'white' : 'black', reason: 'resignation' });
+        } else if (f.type === 'drawOffer') {
+          setDrawOffered(true);
+        } else if (f.type === 'drawAccept') {
+          setDrawPending(false);
+          setActive(null);
+          setGameOver({ winner: null, reason: 'agreement' });
+        } else if (f.type === 'drawDecline') {
+          setDrawPending(false);
+        }
+      },
+    };
+    return () => {
+      remote.link.ev = prev;
+    };
+  }, [remote]);
+
+  // Apply the opponent's actions one at a time, in whichever house-rule
+  // state the game is currently in (same state on both phones).
+  useEffect(() => {
+    if (!remote || inbox.length === 0) return;
+    const m = inbox[0];
+    setInbox((q) => q.slice(1));
+    if (gameOver) return;
+    const opp: 'w' | 'b' = remote.myColor === 'w' ? 'b' : 'w';
+    if (losingSideCounter) {
+      if (losingSideCounter.matedColor === opp && m.from === losingSideCounter.kingSquare) handleKingCounterAttack(m.to);
+      return;
+    }
+    if (finishingMate) {
+      if (finishingMate.winnerColor === opp) finalizeKingCapture(m.from, m.to);
+      return;
+    }
+    if (gameRef.current!.turn() !== opp) return; // duplicate / out-of-turn: ignore
+    finalizeMove(m.from, m.to, m.promotion as 'q' | 'r' | 'b' | 'n' | undefined);
+    // Adopt the mover's own clock reading.
+    if (opp === 'w') setWhiteSeconds(m.secs);
+    else setBlackSeconds(m.secs);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inbox]);
 
   // Computer's turn: think for a moment, then play a move via the normal path.
   useEffect(() => {
@@ -454,7 +559,7 @@ export default function TwoPlayerApp({ onBack }: Props) {
       return;
     }
     const turn = gameRef.current!.turn();
-    if (!hintEnabled[turn] || (vsComputer && computerColor === turn)) {
+    if (!hintEnabled[turn] || (vsComputer && computerColor === turn) || (remote && remote.myColor !== turn)) {
       setHintMove(null);
       return;
     }
@@ -543,7 +648,12 @@ export default function TwoPlayerApp({ onBack }: Props) {
 
   const status = (() => {
     if (phase === 'setup') return 'Setting up new game';
-    if (gameOver) return `${gameOver.winner === 'white' ? 'White' : 'Black'} wins by checkmate`;
+    if (gameOver) {
+      if (!gameOver.winner) return `Draw by ${gameOver.reason}`;
+      return `${gameOver.winner === 'white' ? 'White' : 'Black'} wins by ${gameOver.reason}`;
+    }
+    if (remote && linkState === 'failed') return 'Opponent not responding';
+    if (remote && game.turn() !== remote.myColor && !finishingMate && !losingSideCounter) return 'Opponent’s turn';
     if (losingSideCounter) return 'Checkmate — your king can strike back. Tap it, then a checking piece.';
     if (finishingMate) return 'Checkmate — capture the king to win';
     if (thinking) return 'Computer is thinking…';
@@ -566,29 +676,78 @@ export default function TwoPlayerApp({ onBack }: Props) {
   const baseHintBlocked =
     phase !== 'playing' || !!gameOver || !!finishingMate || !!losingSideCounter || !!pendingPromotion || thinking;
 
+  const bottomColor: 'w' | 'b' = remote ? remote.myColor : 'w';
+  const topColor: 'w' | 'b' = bottomColor === 'w' ? 'b' : 'w';
+
+  // One player's block: clock + their trophy row. The top block has the clock
+  // first, the bottom block the trophies first (trophies always sit directly
+  // below the board from the owner's own view in single-device mode).
+  const renderPanel = (color: 'w' | 'b', top: boolean) => {
+    const isW = color === 'w';
+    const flipped = !remote && top; // single-device: the top player sits opposite
+    const clock = (
+      <ClockDisplay
+        label={isW ? 'White' : 'Black'}
+        seconds={isW ? whiteSeconds : blackSeconds}
+        active={active === (isW ? 'white' : 'black')}
+        flipped={flipped}
+        paused={paused}
+        onPauseToggle={handlePauseToggle}
+        onHintToggle={() => handleHintToggle(color)}
+        hintActive={hintEnabled[color]}
+        hintDisabled={baseHintBlocked || (vsComputer && computerColor === color) || (!!remote && remote.myColor !== color)}
+        hidePause={!!remote}
+      />
+    );
+    const trophies = (
+      <CapturedPieces
+        color={isW ? 'b' : 'w'}
+        pieces={isW ? capturedBlack : capturedWhite}
+        advantage={isW ? whiteAdvantage : blackAdvantage}
+        flipped={flipped}
+      />
+    );
+    return (
+      <div className={`player-panel ${activeSide === color ? 'active-panel' : ''}`}>
+        {top ? clock : trophies}
+        {top ? trophies : clock}
+      </div>
+    );
+  };
+
   return (
     <div className="app">
       <div className="top-bar">
         {onBack && <button className="menu-back-btn" onClick={onBack}>← Menu</button>}
         <span className="turn-indicator">{status}</span>
-        {phase === 'playing' && <button onClick={handleOpenSetup}>New game</button>}
+        {!remote && phase === 'playing' && <button onClick={handleOpenSetup}>New game</button>}
+        {remote && linkState === 'failed' && (
+          <button
+            onClick={() => {
+              const f = failedSend.current;
+              if (f) enqueueSend(f.type, f.payload);
+            }}
+          >
+            Resend
+          </button>
+        )}
+        {remote && !gameOver && (
+          <>
+            <button onClick={() => { enqueueSend('resign', []); setActive(null); setGameOver({ winner: remote.myColor === 'w' ? 'black' : 'white', reason: 'resignation' }); }}>
+              Resign
+            </button>
+            <button
+              disabled={drawPending}
+              onClick={() => { setDrawPending(true); enqueueSend('drawOffer', []); }}
+            >
+              {drawPending ? 'Draw offered…' : 'Offer draw'}
+            </button>
+          </>
+        )}
+        {remote && linkState === 'sending' && <span className="link-banner">📡 sending…</span>}
       </div>
 
-      {/* Black's own trophies (captured white pieces) sit below the board from Black's rotated view, i.e. at the top of the screen. */}
-      <div className={`player-panel ${activeSide === 'b' ? 'active-panel' : ''}`}>
-        <ClockDisplay
-          label="Black"
-          seconds={blackSeconds}
-          active={active === 'black'}
-          flipped
-          paused={paused}
-          onPauseToggle={handlePauseToggle}
-          onHintToggle={() => handleHintToggle('b')}
-          hintActive={hintEnabled.b}
-          hintDisabled={baseHintBlocked || (vsComputer && computerColor === 'b')}
-        />
-        <CapturedPieces color="w" pieces={capturedWhite} advantage={blackAdvantage} flipped />
-      </div>
+      {renderPanel(topColor, true)}
 
       <ChessBoard
         game={game}
@@ -601,22 +760,11 @@ export default function TwoPlayerApp({ onBack }: Props) {
         analysisLines={analysisLines}
         analysisTint={analysisTint}
         lastMove={lastMove}
+        orientation={remote ? remote.myColor : 'w'}
+        upright={!!remote}
       />
 
-      {/* White's own trophies (captured black pieces) sit below the board from White's view, i.e. at the bottom of the screen. */}
-      <div className={`player-panel ${activeSide === 'w' ? 'active-panel' : ''}`}>
-        <CapturedPieces color="b" pieces={capturedBlack} advantage={whiteAdvantage} />
-        <ClockDisplay
-          label="White"
-          seconds={whiteSeconds}
-          active={active === 'white'}
-          paused={paused}
-          onPauseToggle={handlePauseToggle}
-          onHintToggle={() => handleHintToggle('w')}
-          hintActive={hintEnabled.w}
-          hintDisabled={baseHintBlocked || (vsComputer && computerColor === 'w')}
-        />
-      </div>
+      {renderPanel(bottomColor, false)}
 
       {phase === 'setup' && (
         <div className="setup-overlay">
@@ -683,6 +831,27 @@ export default function TwoPlayerApp({ onBack }: Props) {
 
       {pendingPromotion && (
         <PromotionPicker color={pendingPromotion.color} onChoose={handlePromotionChoice} />
+      )}
+
+      {remote && drawOffered && !gameOver && (
+        <div className="setup-overlay">
+          <div className="setup-panel">
+            <h2>Draw offered</h2>
+            <div className="time-controls">
+              <button
+                onClick={() => {
+                  setDrawOffered(false);
+                  setActive(null);
+                  setGameOver({ winner: null, reason: 'agreement' });
+                  enqueueSend('drawAccept', []);
+                }}
+              >
+                Accept
+              </button>
+              <button onClick={() => { setDrawOffered(false); enqueueSend('drawDecline', []); }}>Decline</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

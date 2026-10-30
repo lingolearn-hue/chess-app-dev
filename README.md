@@ -1,4 +1,4 @@
-Version: 26.0 — 2026-10-30
+Version: 27.0 — 2026-10-30
 
 # React + TypeScript + Vite
 
