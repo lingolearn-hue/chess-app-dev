@@ -1,0 +1,50 @@
+.checkers-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  width: 100vw;
+  background: #1a1a1a;
+  color: #eee;
+  font-family: system-ui, sans-serif;
+  overflow: hidden;
+  touch-action: none;
+  gap: 0.3rem;
+}
+.checkers-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  min-height: 3rem;
+  padding: 0 0.6rem;
+  box-sizing: border-box;
+}
+.checkers-bar button {
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  border: none;
+  background: #3a3a3a;
+  color: #eee;
+  cursor: pointer;
+}
+.checkers-status { font-weight: 600; font-size: 0.95rem; }
+.checkers-status.mine { color: #4fa8ff; }
+.checkers-board {
+  width: min(96vw, calc((100vh - 6rem) * 13.8 / 15.6));
+  height: auto;
+  background: #26343b;
+  border-radius: 14px;
+  user-select: none;
+}
+.ck-hole { fill: #141c20; stroke: #3b4c55; stroke-width: 0.05; }
+.ck-home-1 { fill: #3a3118; }
+.ck-home-2 { fill: #172a42; }
+.ck-target { stroke: #8fbf6a; stroke-width: 0.09; }
+.ck-last { stroke: #f2f2f2; stroke-width: 0.1; }
+.ck-dest { fill: #8fd18f; pointer-events: none; }
+.ck-marble { transition: transform 260ms ease-out; cursor: pointer; }
+.ck-selected { stroke: #fff; stroke-width: 0.12; }
+.checkers-foot { font-size: 0.8rem; opacity: 0.8; margin: 0; min-height: 1.2rem; }

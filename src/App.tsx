@@ -28,7 +28,8 @@ type View =
   | 'endgame-library'
   | 'practice-game'
   | 'sound-link'
-  | 'two-device';
+  | 'two-device'
+  | 'checkers';
 
 interface PracticeParams {
   fen: string;
@@ -43,6 +44,7 @@ export default function App() {
   // Where "Back" from the practice screen should return to.
   const [practiceOrigin, setPracticeOrigin] = useState<'opening-library' | 'endgame-library'>('opening-library');
 
+  if (view === 'checkers') return <TwoDeviceApp kind="checkers" onBack={() => setView('home')} />;
   if (view === 'two-device') return <TwoDeviceApp onBack={() => setView('home')} />;
   if (view === 'sound-link') return <SoundLinkTest onBack={() => setView('home')} />;
   if (view === 'two-player') return <TwoPlayerApp onBack={() => setView('home')} />;
@@ -148,6 +150,7 @@ export default function App() {
       onSelectStory={() => setView('story-home')}
       onSelectOpenings={() => setView('opening-library')}
       onSelectEndgames={() => setView('endgame-library')}
+      onSelectCheckers={() => setView('checkers')}
       onSelectTwoDevice={() => setView('two-device')}
       onSelectSoundLink={() => setView('sound-link')}
     />

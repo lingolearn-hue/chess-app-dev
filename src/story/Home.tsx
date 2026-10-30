@@ -3,11 +3,12 @@ interface Props {
   onSelectStory: () => void;
   onSelectOpenings: () => void;
   onSelectEndgames: () => void;
+  onSelectCheckers: () => void;
   onSelectTwoDevice: () => void;
   onSelectSoundLink: () => void;
 }
 
-export default function Home({ onSelectTwoPlayer, onSelectStory, onSelectOpenings, onSelectEndgames, onSelectTwoDevice, onSelectSoundLink }: Props) {
+export default function Home({ onSelectTwoPlayer, onSelectStory, onSelectOpenings, onSelectEndgames, onSelectCheckers, onSelectTwoDevice, onSelectSoundLink }: Props) {
   return (
     <div className="home-screen">
       <h1 className="home-title">Chess</h1>
@@ -30,6 +31,10 @@ export default function Home({ onSelectTwoPlayer, onSelectStory, onSelectOpening
       <button className="home-tile" onClick={onSelectTwoDevice}>
         <span className="home-tile-title">Two Devices</span>
         <span className="home-tile-sub">1v1 across two phones, moves sent by sound</span>
+      </button>
+      <button className="home-tile" onClick={onSelectCheckers}>
+        <span className="home-tile-title">Chinese Checkers</span>
+        <span className="home-tile-sub">Two devices, moves sent by sound</span>
       </button>
       <button className="home-tile" onClick={onSelectSoundLink}>
         <span className="home-tile-title">Sound Link (test)</span>
