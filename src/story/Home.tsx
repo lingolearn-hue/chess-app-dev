@@ -34,7 +34,7 @@ export default function Home({ onSelectTwoPlayer, onSelectStory, onSelectOpening
       </button>
       <button className="home-tile" onClick={onSelectCheckers}>
         <span className="home-tile-title">Chinese Checkers</span>
-        <span className="home-tile-sub">Two devices, moves sent by sound</span>
+        <span className="home-tile-sub">Vs computer, one device, or two devices by sound</span>
       </button>
       <button className="home-tile" onClick={onSelectSoundLink}>
         <span className="home-tile-title">Sound Link (test)</span>

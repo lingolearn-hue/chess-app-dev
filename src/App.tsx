@@ -11,6 +11,7 @@ import EndgameLibrary from './story/EndgameLibrary';
 import PracticeGame from './story/PracticeGame';
 import SoundLinkTest from './link/SoundLinkTest';
 import TwoDeviceApp from './link/TwoDeviceApp';
+import CheckersHome from './checkers/CheckersHome';
 import { getOpponent } from './story/opponents';
 import { LESSONS, PUZZLES } from './story/content';
 import { loadPlayerRating, loadOpponentRecord } from './story/storyStorage';
@@ -44,7 +45,7 @@ export default function App() {
   // Where "Back" from the practice screen should return to.
   const [practiceOrigin, setPracticeOrigin] = useState<'opening-library' | 'endgame-library'>('opening-library');
 
-  if (view === 'checkers') return <TwoDeviceApp kind="checkers" onBack={() => setView('home')} />;
+  if (view === 'checkers') return <CheckersHome onBack={() => setView('home')} />;
   if (view === 'two-device') return <TwoDeviceApp onBack={() => setView('home')} />;
   if (view === 'sound-link') return <SoundLinkTest onBack={() => setView('home')} />;
   if (view === 'two-player') return <TwoPlayerApp onBack={() => setView('home')} />;

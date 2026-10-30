@@ -91,7 +91,7 @@ export default function TwoDeviceApp({ onBack, kind = 'chess' }: Props) {
 
   if (stage === 'playing' && remote) {
     if (checkers) {
-      return <CheckersApp remote={{ link: remote.link, myPlayer: remote.myColor === 'w' ? 1 : 2 }} onBack={onBack} />;
+      return <CheckersApp mode="remote" remote={{ link: remote.link, myPlayer: remote.myColor === 'w' ? 1 : 2 }} onBack={onBack} />;
     }
     return <TwoPlayerApp remote={remote} onBack={onBack} />;
   }
